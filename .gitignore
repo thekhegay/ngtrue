@@ -1,0 +1,15 @@
+node_modules/
+dist/
+coverage/
+
+# VitePress build output and cache. `docs/api/` is NOT here: the generated API
+# reference is committed on purpose, so a pull request shows what a change did
+# to the public surface, and `docs:check` fails when the commit is stale.
+docs/.vitepress/dist/
+docs/.vitepress/cache/
+
+.DS_Store
+*.log
+
+# Emitted by `npm run fixtures` (ngc). Compiled test fixtures, never shipped.
+.fixtures/

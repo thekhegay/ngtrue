@@ -1,0 +1,21 @@
+{
+  "name": "@fixture/broken",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./dist/index.js"
+    },
+    "./gone": {
+      "types": "./dist/gone.d.ts",
+      "default": "./dist/gone.js"
+    },
+    "./folder": "./dist",
+    "./absolute": "dist/index.js",
+    "./locales/*": "./dist/locales/*.js",
+    "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "never-imported": "^1.0.0"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  // The test fixtures are the only Angular components in the repository, and
+  // this is the only place the Angular compiler runs.
+  //
+  // It has to run. Angular's JIT compiler cannot see `input()`, `model()` or
+  // `output()`: those are initializer APIs, so the inputs and outputs they
+  // declare exist only after static analysis, and a JIT-compiled control comes
+  // out with an empty definition. The conformance suite reads exactly that
+  // definition, and a control worth checking is written with `model()` — so
+  // fixtures compiled any other way would have the suite proving itself against
+  // controls nobody writes.
+  //
+  // `ngc` rather than a vite plugin, because every plugin that does this pulls
+  // in `@angular/build`, which is a build system this repository does not
+  // otherwise have and does not otherwise need. `@angular/compiler-cli` ships
+  // `ngc`, the emitted components are ordinary ESM, and the spec hosts around
+  // them are compiled just-in-time at run time, which works because a plain
+  // template with no initializer APIs in it is something JIT handles fine.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src/testing/fixtures",
+    "outDir": ".fixtures",
+    "declaration": true,
+    "declarationMap": false
+  },
+  // `include: []` clears the base config's own glob: `files` adds to it
+  // rather than replacing it, and without this the whole of `src/` — specs and
+  // the node fixtures' little packages included — joins the program.
+  "include": [],
+  "files": ["src/testing/fixtures/controls.ts"],
+  "angularCompilerOptions": {
+    "compilationMode": "full",
+    "strictTemplates": true,
+    "strictInjectionParameters": true
+  }
+}

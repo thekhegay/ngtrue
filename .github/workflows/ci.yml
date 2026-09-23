@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          # The lowest supported major, so a syntax or API that only the newest
+          # runtime has fails here rather than in somebody's install. The range
+          # itself lives in `engines`; this is the floor of it.
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - run: npm run typecheck
+
+      # Before the tests, and not only because `pretest` would do it anyway:
+      # a build failure should be reported as a build failure.
+      - run: npm run build
+
+      - run: npm test
+
+      # The committed API reference against what the sources say now. Fails on a
+      # change that was made without regenerating it, which is the only way a
+      # generated-and-committed document stays true.
+      - run: npm run docs:check
+
+      - run: npm run docs:build

@@ -1,0 +1,101 @@
+{
+  "name": "ngtrue",
+  "version": "0.1.0",
+  "description": "Checks that keep an Angular library true: a Signal Forms control conformance suite and packaging checks.",
+  "license": "MIT",
+  "author": "Roman Khegay <rk@garuna.dev> (https://garuna.dev)",
+  "homepage": "https://thekhegay.github.io/ngtrue",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thekhegay/ngtrue.git"
+  },
+  "bugs": {
+    "url": "https://github.com/thekhegay/ngtrue/issues"
+  },
+  "keywords": [
+    "angular",
+    "angular-library",
+    "signal-forms",
+    "conformance",
+    "testing",
+    "packaging",
+    "exports",
+    "peer-dependencies"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/root/index.d.ts",
+      "default": "./dist/root/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "default": "./dist/testing/index.js"
+    },
+    "./node": {
+      "types": "./dist/node/index.d.ts",
+      "default": "./dist/node/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "fixtures": "ngc -p tsconfig.fixtures.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
+    "docs:api": "node scripts/api-docs.mjs",
+    "docs:check": "node scripts/api-docs.mjs --check",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "pretest": "npm run build && npm run fixtures",
+    "pretest:watch": "npm run build && npm run fixtures"
+  },
+  "peerDependencies": {
+    "@angular/core": ">=22.0.0",
+    "@angular/forms": ">=22.0.0",
+    "typescript": ">=5.4.0 <7.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@angular/core": {
+      "optional": true
+    },
+    "@angular/forms": {
+      "optional": true
+    },
+    "typescript": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@angular/common": "^22.1.7",
+    "@angular/compiler": "^22.1.7",
+    "@angular/compiler-cli": "^22.1.7",
+    "@angular/core": "^22.1.7",
+    "@angular/forms": "^22.1.7",
+    "@angular/platform-browser": "^22.1.7",
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.2",
+    "eslint": "^10.11.0",
+    "eslint-config-prettier": "^10.1.8",
+    "jsdom": "^30.1.1",
+    "prettier": "^3.9.8",
+    "rxjs": "~7.8.2",
+    "typedoc": "^0.28.20",
+    "typedoc-plugin-markdown": "^4.13.1",
+    "typedoc-vitepress-theme": "^1.1.4",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.70.1",
+    "vitepress": "^1.6.4",
+    "vitest": "^4.1.11"
+  },
+  "engines": {
+    "node": "^22.22.3 || ^24.15.0 || ^26.0.0"
+  }
+}

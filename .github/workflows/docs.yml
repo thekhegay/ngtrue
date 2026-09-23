@@ -1,0 +1,58 @@
+name: Docs
+
+# Publishes the VitePress site to GitHub Pages.
+#
+# Nothing here enables Pages: the repository owner has to turn it on and set the
+# source to "GitHub Actions" once, and until then this workflow is written and
+# idle. `workflow_dispatch` is there so the first run can be a deliberate one.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time, and a queued run is not cancelled: cancelling a
+# half-finished deploy is how a site ends up serving a partial build.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # The site embeds the generated API reference, so a stale commit would be
+      # published as though it were current. Checked here as well as in CI,
+      # because this workflow can run on its own.
+      - run: npm run docs:check
+
+      - run: npm run docs:build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: docs/.vitepress/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

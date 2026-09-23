@@ -1,0 +1,47 @@
+{
+  // Strictness is ngwr's, flag for flag, because ngtrue's whole job is to be
+  // trusted by a repository that already compiles under it — a check that only
+  // typechecks under looser settings than its caller is a check the caller
+  // cannot adopt.
+  //
+  // `moduleResolution` is the one deliberate departure. ngwr sets `bundler`,
+  // which is right for a package ng-packagr bundles; ngtrue is emitted by plain
+  // `tsc` and loaded by Node, so it resolves the way Node does. That is also why
+  // every relative import in `src/` carries an explicit `.js` extension: under
+  // `nodenext` an extensionless ESM import does not resolve at runtime, and
+  // `unresolvableTypes` in `ngtrue/node` exists to catch exactly that class of
+  // mistake in someone else's package.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": ["ES2022", "DOM"],
+    "types": ["node"],
+
+    "strict": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "experimentalDecorators": true,
+
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "./dist"
+  },
+  "include": ["src/**/*.ts", "vitest.config.ts", "docs/.vitepress/config.ts"],
+  // The little packages under `src/node/fixtures/` are DATA for the checks in
+  // `src/node` to read — a manifest and a source tree each, deliberately
+  // including one that imports a package nobody installed, because that is the
+  // finding the check exists to report. Typechecking them would be typechecking
+  // the bug.
+  "exclude": ["src/node/fixtures/**"]
+}

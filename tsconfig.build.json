@@ -1,0 +1,15 @@
+{
+  // What ships. Plain `tsc` to ESM — no ng-packagr, no partial compilation, no
+  // `ngc`. Nothing in `src/` outside the test fixtures is a component or a
+  // directive, so there is no template to compile and no `ɵɵngDeclare*` for a
+  // consumer's linker to process; running the Angular compiler over this would
+  // produce byte-identical output and cost every consumer a build step's worth
+  // of explanation. The fixtures under `src/testing/fixtures/` ARE components,
+  // which is why they are excluded here and compiled only by the test run.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.spec.ts", "src/**/fixtures/**"]
+}
