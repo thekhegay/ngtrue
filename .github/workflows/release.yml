@@ -79,8 +79,12 @@ jobs:
 
       - run: npm run build
 
-      - name: Publish to npm
-        run: npm publish --access public --provenance
+      # Staged, not direct: the trusted publisher deliberately does not allow
+      # `npm publish`, so a compromised run cannot put a version in front of
+      # users. The release is live once a maintainer approves it with 2FA,
+      # either on npmjs.com or with `npm stage approve`.
+      - name: Stage the release on npm
+        run: npm stage publish --access public --provenance
 
       # Tagged after the publish: a tag naming a version npm rejected is worse
       # than no tag, because the next attempt would refuse to reuse it.
