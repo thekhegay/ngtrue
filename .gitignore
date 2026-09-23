@@ -1,5 +1,5 @@
 node_modules/
-dist/
+/dist/
 coverage/
 
 # VitePress build output and cache. `docs/api/` is NOT here: the generated API

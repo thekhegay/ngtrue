@@ -4,7 +4,7 @@
 
 > **unresolvedExports**(`options`): readonly `string`[]
 
-Defined in: src/node/unresolved-exports.ts:53
+Defined in: [src/node/unresolved-exports.ts:53](https://github.com/thekhegay/ngtrue/blob/main/src/node/unresolved-exports.ts#L53)
 
 Every subpath in `exports` that does not resolve to a file on disk, as one
 sentence each. An empty array is a pass.

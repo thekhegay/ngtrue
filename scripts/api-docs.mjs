@@ -49,6 +49,11 @@ async function generate(out, docsRoot) {
     excludeInternal: true,
     sort: ['source-order'],
     logLevel: 'Warn',
+    // Source links are pinned to the branch, not to the commit. typedoc embeds
+    // the current sha by default, so every commit would make the committed
+    // reference stale against itself and the freshness check would fail on a
+    // change it is not there to catch.
+    gitRevision: 'main',
     // The theme writes a sidebar for VitePress to import. Without it every new
     // export would need a hand-edited nav entry, which is the hand-maintained
     // docs site this repository is trying not to have.

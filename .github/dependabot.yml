@@ -1,0 +1,59 @@
+version: 2
+
+updates:
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'daily'
+      time: '08:00'
+      timezone: 'Asia/Almaty'
+    cooldown:
+      default-days: 1
+    open-pull-requests-limit: 10
+    assignees:
+      - 'thekhegay'
+    labels:
+      - 'dependencies'
+      - 'type: chore'
+    groups:
+      angular:
+        patterns:
+          - '@angular/*'
+          - '@angular-eslint/*'
+          - 'angular-eslint'
+      eslint:
+        patterns:
+          - 'eslint'
+          - 'eslint-*'
+          - '@eslint/*'
+          - 'typescript-eslint'
+          - 'prettier'
+          - 'prettier-*'
+      docs:
+        patterns:
+          - 'vitepress'
+          - 'typedoc'
+          - 'typedoc-*'
+      types:
+        patterns:
+          - '@types/*'
+
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'daily'
+      time: '08:00'
+      timezone: 'Asia/Almaty'
+    groups:
+      actions:
+        patterns:
+          - '*'
+        update-types:
+          - 'minor'
+          - 'patch'
+    assignees:
+      - 'thekhegay'
+    labels:
+      - 'dependencies'
+      - 'github-actions'
+      - 'type: chore'

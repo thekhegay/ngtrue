@@ -2,7 +2,7 @@
 
 # Interface: UnresolvableTypesOptions
 
-Defined in: src/node/unresolvable-types.ts:11
+Defined in: [src/node/unresolvable-types.ts:11](https://github.com/thekhegay/ngtrue/blob/main/src/node/unresolvable-types.ts#L11)
 
 Options for [unresolvableTypes](../functions/unresolvableTypes.md).
 
@@ -12,7 +12,7 @@ Options for [unresolvableTypes](../functions/unresolvableTypes.md).
 
 > `readonly` **packageDir**: `string`
 
-Defined in: src/node/unresolvable-types.ts:13
+Defined in: [src/node/unresolvable-types.ts:13](https://github.com/thekhegay/ngtrue/blob/main/src/node/unresolvable-types.ts#L13)
 
 The directory holding the `package.json` to check — the BUILT package.
 
@@ -22,7 +22,7 @@ The directory holding the `package.json` to check — the BUILT package.
 
 > `readonly` `optional` **modes?**: readonly [`ResolutionMode`](../type-aliases/ResolutionMode.md)[]
 
-Defined in: src/node/unresolvable-types.ts:19
+Defined in: [src/node/unresolvable-types.ts:19](https://github.com/thekhegay/ngtrue/blob/main/src/node/unresolvable-types.ts#L19)
 
 Which modes to probe. Both by default, and both is the point: `bundler` is
 forgiving in ways `node16` is not, so a package checked only under the mode

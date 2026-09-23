@@ -2,7 +2,7 @@
 
 # Interface: UnresolvedExportsOptions
 
-Defined in: src/node/unresolved-exports.ts:7
+Defined in: [src/node/unresolved-exports.ts:7](https://github.com/thekhegay/ngtrue/blob/main/src/node/unresolved-exports.ts#L7)
 
 Options for [unresolvedExports](../functions/unresolvedExports.md).
 
@@ -12,7 +12,7 @@ Options for [unresolvedExports](../functions/unresolvedExports.md).
 
 > `readonly` **packageDir**: `string`
 
-Defined in: src/node/unresolved-exports.ts:16
+Defined in: [src/node/unresolved-exports.ts:16](https://github.com/thekhegay/ngtrue/blob/main/src/node/unresolved-exports.ts#L16)
 
 The directory holding the `package.json` to check.
 

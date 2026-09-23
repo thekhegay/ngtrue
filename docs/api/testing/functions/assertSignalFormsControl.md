@@ -4,7 +4,7 @@
 
 > **assertSignalFormsControl**\<`T`\>(`subject`, `options?`): `Promise`\<`void`\>
 
-Defined in: src/testing/signal-forms-control.ts:154
+Defined in: [src/testing/signal-forms-control.ts:154](https://github.com/thekhegay/ngtrue/blob/main/src/testing/signal-forms-control.ts#L154)
 
 Assert that a candidate control is wired to Angular's Signal Forms, and fail
 naming the rule that broke.
