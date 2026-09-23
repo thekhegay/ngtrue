@@ -1,0 +1,95 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump'
+        required: true
+        type: choice
+        default: patch
+        options:
+          - patch
+          - minor
+          - major
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+# SHA-pinned because this workflow holds the npm OIDC token; keep the version comments.
+jobs:
+  release:
+    name: Tag, release and publish
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # No dependency cache: this job holds the npm OIDC token, and a poisoned
+      # cache would hand it to whatever the cache restores.
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 26
+          package-manager-cache: false
+          registry-url: 'https://registry.npmjs.org'
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - run: npm run typecheck
+
+      - run: npm test
+
+      - run: npm run docs:check
+
+      - name: Assert npm supports trusted publishing
+        run: |
+          floor=11.5.1
+          have=$(npm --version)
+          echo "npm $have on node $(node --version)"
+          IFS=. read -r fa fb fc <<<"$floor"
+          IFS=. read -r ha hb hc <<<"${have%%-*}"
+          if (( ha < fa || (ha == fa && (hb < fb || (hb == fb && hc < fc))) )); then
+            echo "::error::npm $have is below the $floor floor for OIDC trusted publishing. Raise node-version, or install an exact npm version, never npm@latest."
+            exit 1
+          fi
+
+      - name: Bump the version
+        id: bump
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          version=$(npm version "${{ inputs.bump }}" --message 'chore(release): v%s')
+          echo "version=${version#v}" >> "$GITHUB_OUTPUT"
+          echo "tag=$version" >> "$GITHUB_OUTPUT"
+
+      - run: npm run build
+
+      - name: Publish to npm
+        run: npm publish --access public --provenance
+
+      # Pushed after the publish: a tag that names a version npm rejected is
+      # worse than no tag, because the next run would refuse to reuse it.
+      - name: Push the commit and the tag
+        run: git push --follow-tags origin main
+
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
+        with:
+          tag_name: ${{ steps.bump.outputs.tag }}
+          name: ${{ steps.bump.outputs.tag }}
+          generate_release_notes: true
+          make_latest: true
+          token: ${{ secrets.GITHUB_TOKEN }}
