@@ -10,6 +10,11 @@ updates:
     cooldown:
       default-days: 1
     open-pull-requests-limit: 10
+    # Angular's compiler-cli declares `typescript >=6.0 <6.1`, so 6.1 and 7 do
+    # not install at all - the bump lands as a red `npm ci`, not as a choice.
+    ignore:
+      - dependency-name: 'typescript'
+        versions: ['>=6.1']
     assignees:
       - 'thekhegay'
     labels:

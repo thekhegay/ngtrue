@@ -1,17 +1,11 @@
 name: Release
 
+# Publishes when a `chore(release): vX.Y.Z` commit lands on main. The bump
+# itself goes through a pull request like any other change, so nothing here
+# pushes to a protected branch - the tag is all this workflow writes.
 on:
-  workflow_dispatch:
-    inputs:
-      bump:
-        description: 'Version bump'
-        required: true
-        type: choice
-        default: patch
-        options:
-          - patch
-          - minor
-          - major
+  push:
+    branches: [main]
 
 concurrency:
   group: release
@@ -25,7 +19,7 @@ jobs:
   release:
     name: Tag, release and publish
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: startsWith(github.event.head_commit.message, 'chore(release): v')
 
     permissions:
       contents: write
@@ -67,24 +61,35 @@ jobs:
             exit 1
           fi
 
-      - name: Bump the version
+      - name: Read the version being released
         id: bump
         run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          version=$(npm version "${{ inputs.bump }}" --message 'chore(release): v%s')
-          echo "version=${version#v}" >> "$GITHUB_OUTPUT"
-          echo "tag=$version" >> "$GITHUB_OUTPUT"
+          version=$(node -p 'require("./package.json").version')
+          subject=$(git log -1 --pretty=%s)
+          if [[ "$subject" != "chore(release): v$version"* ]]; then
+            echo "::error::Commit says '$subject' and package.json says $version. They have to agree."
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null 2>&1; then
+            echo "::error::Tag v$version already exists on origin."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
 
       - run: npm run build
 
       - name: Publish to npm
         run: npm publish --access public --provenance
 
-      # Pushed after the publish: a tag that names a version npm rejected is
-      # worse than no tag, because the next run would refuse to reuse it.
-      - name: Push the commit and the tag
-        run: git push --follow-tags origin main
+      # Tagged after the publish: a tag naming a version npm rejected is worse
+      # than no tag, because the next attempt would refuse to reuse it.
+      - name: Tag the release
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -a "${{ steps.bump.outputs.tag }}" -m "${{ steps.bump.outputs.tag }}"
+          git push origin "${{ steps.bump.outputs.tag }}"
 
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
