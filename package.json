@@ -1,6 +1,6 @@
 {
   "name": "ngtrue",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Checks that keep an Angular library true: a Signal Forms control conformance suite and packaging checks.",
   "license": "MIT",
   "author": "Roman Khegay <rk@garuna.dev> (https://garuna.dev)",
