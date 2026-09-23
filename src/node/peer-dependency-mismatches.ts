@@ -5,6 +5,7 @@ import { join, posix, relative, resolve, sep } from 'node:path';
 import { dependencyRecord, readManifest } from './manifest.js';
 
 /** Options for {@link peerDependencyMismatches}. */
+/** @since 0.1.0 */
 export interface PeerDependencyMismatchesOptions {
   /** The directory holding the `package.json` to check. */
   readonly packageDir: string;
@@ -80,6 +81,8 @@ const DEFAULT_EXCLUDE = ['**/*.spec.ts', '**/*.test.ts', '**/*.d.ts', '**/fixtur
  *
  * Relative paths, `node:` specifiers, bare Node builtins, subpath imports
  * (`#internal`) and the package's own name are all skipped.
+ *
+ * @since 0.1.0
  */
 export function peerDependencyMismatches(options: PeerDependencyMismatchesOptions): readonly string[] {
   const packageDir = resolve(options.packageDir);

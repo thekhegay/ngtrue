@@ -2,9 +2,11 @@
 
 # Interface: PeerDependencyMismatchesOptions
 
-Defined in: [src/node/peer-dependency-mismatches.ts:8](https://github.com/thekhegay/ngtrue/blob/main/src/node/peer-dependency-mismatches.ts#L8)
+Defined in: [src/node/peer-dependency-mismatches.ts:9](https://github.com/thekhegay/ngtrue/blob/main/src/node/peer-dependency-mismatches.ts#L9)
 
-Options for [peerDependencyMismatches](../functions/peerDependencyMismatches.md).
+## Since
+
+0.1.0
 
 ## Properties
 
@@ -12,7 +14,7 @@ Options for [peerDependencyMismatches](../functions/peerDependencyMismatches.md)
 
 > `readonly` **packageDir**: `string`
 
-Defined in: [src/node/peer-dependency-mismatches.ts:10](https://github.com/thekhegay/ngtrue/blob/main/src/node/peer-dependency-mismatches.ts#L10)
+Defined in: [src/node/peer-dependency-mismatches.ts:11](https://github.com/thekhegay/ngtrue/blob/main/src/node/peer-dependency-mismatches.ts#L11)
 
 The directory holding the `package.json` to check.
 
@@ -22,7 +24,7 @@ The directory holding the `package.json` to check.
 
 > `readonly` `optional` **sourceDir?**: `string`
 
-Defined in: [src/node/peer-dependency-mismatches.ts:15](https://github.com/thekhegay/ngtrue/blob/main/src/node/peer-dependency-mismatches.ts#L15)
+Defined in: [src/node/peer-dependency-mismatches.ts:16](https://github.com/thekhegay/ngtrue/blob/main/src/node/peer-dependency-mismatches.ts#L16)
 
 The directory holding the sources that SHIP, relative to `packageDir` or
 absolute. Defaults to `src`.
@@ -33,7 +35,7 @@ absolute. Defaults to `src`.
 
 > `readonly` `optional` **tsconfig?**: `string`
 
-Defined in: [src/node/peer-dependency-mismatches.ts:23](https://github.com/thekhegay/ngtrue/blob/main/src/node/peer-dependency-mismatches.ts#L23)
+Defined in: [src/node/peer-dependency-mismatches.ts:24](https://github.com/thekhegay/ngtrue/blob/main/src/node/peer-dependency-mismatches.ts#L24)
 
 A build tsconfig whose `exclude` says which files do not ship.
 
@@ -47,7 +49,7 @@ someone adds a third kind of test file to one of them.
 
 > `readonly` `optional` **exclude?**: readonly `string`[]
 
-Defined in: [src/node/peer-dependency-mismatches.ts:28](https://github.com/thekhegay/ngtrue/blob/main/src/node/peer-dependency-mismatches.ts#L28)
+Defined in: [src/node/peer-dependency-mismatches.ts:29](https://github.com/thekhegay/ngtrue/blob/main/src/node/peer-dependency-mismatches.ts#L29)
 
 Glob-ish patterns for files that do not ship, used when `tsconfig` is not
 given. `*` matches within a path segment, `**` across segments.
@@ -58,7 +60,7 @@ given. `*` matches within a path segment, `**` across segments.
 
 > `readonly` `optional` **ignore?**: readonly `string`[]
 
-Defined in: [src/node/peer-dependency-mismatches.ts:34](https://github.com/thekhegay/ngtrue/blob/main/src/node/peer-dependency-mismatches.ts#L34)
+Defined in: [src/node/peer-dependency-mismatches.ts:35](https://github.com/thekhegay/ngtrue/blob/main/src/node/peer-dependency-mismatches.ts#L35)
 
 Packages to leave out of both directions, for the cases neither a manifest
 nor a source scan can settle — a peer that exists to pin a transitive

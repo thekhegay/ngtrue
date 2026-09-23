@@ -7,6 +7,8 @@ import { FormField } from '@angular/forms/signals';
  * The rules {@link assertSignalFormsControl} can break, in the order it checks
  * them. The id is on the thrown {@link SignalFormsControlError}, so a test can
  * assert WHICH rule failed rather than matching prose that will be reworded.
+ *
+ * @since 0.1.0
  */
 export type SignalFormsControlRule =
   | 'value-model'
@@ -19,6 +21,7 @@ export type SignalFormsControlRule =
   | 'touch-marks-touched';
 
 /** Thrown by {@link assertSignalFormsControl}, carrying the rule that broke. */
+/** @since 0.1.0 */
 export class SignalFormsControlError extends Error {
   readonly rule: SignalFormsControlRule;
 
@@ -150,6 +153,8 @@ export interface SignalFormsControlOptions {
  *   rather than all of them, because the later rules cannot be evaluated until
  *   the earlier ones hold — there is nothing to drive a round trip through
  *   until a model has been found.
+ *
+ * @since 0.1.0
  */
 export async function assertSignalFormsControl<T>(
   subject: ComponentFixture<T> | (() => ComponentFixture<T>),

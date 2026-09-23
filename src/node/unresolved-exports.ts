@@ -4,6 +4,7 @@ import { join, posix, resolve, sep } from 'node:path';
 import { exportTargets, readManifest, type ExportTarget } from './manifest.js';
 
 /** Options for {@link unresolvedExports}. */
+/** @since 0.1.0 */
 export interface UnresolvedExportsOptions {
   /**
    * The directory holding the `package.json` to check.
@@ -49,6 +50,8 @@ export interface UnresolvedExportsOptions {
  * imports a missing sibling resolves perfectly and still throws on import.
  * Resolution is a question about the manifest, and that is a question about the
  * build.
+ *
+ * @since 0.1.0
  */
 export function unresolvedExports(options: UnresolvedExportsOptions): readonly string[] {
   const packageDir = resolve(options.packageDir);

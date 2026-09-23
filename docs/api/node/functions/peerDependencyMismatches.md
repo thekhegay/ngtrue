@@ -4,7 +4,7 @@
 
 > **peerDependencyMismatches**(`options`): readonly `string`[]
 
-Defined in: [src/node/peer-dependency-mismatches.ts:84](https://github.com/thekhegay/ngtrue/blob/main/src/node/peer-dependency-mismatches.ts#L84)
+Defined in: [src/node/peer-dependency-mismatches.ts:87](https://github.com/thekhegay/ngtrue/blob/main/src/node/peer-dependency-mismatches.ts#L87)
 
 Every package a shipped source imports and the manifest does not declare, and
 every dependency the manifest declares and no shipped source imports, as one
@@ -59,3 +59,7 @@ Relative paths, `node:` specifiers, bare Node builtins, subpath imports
 ## Returns
 
 readonly `string`[]
+
+## Since
+
+0.1.0

@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import { exportTargets, readManifest } from './manifest.js';
 
 /** A module-resolution mode a consumer's `tsconfig.json` can be in. */
+/** @since 0.1.0 */
 export type ResolutionMode = 'node16' | 'bundler';
 
 /** Options for {@link unresolvableTypes}. */
@@ -63,6 +64,8 @@ export interface UnresolvableTypesOptions {
  * ngtrue, and this is the only function that needs it. Any repository shipping
  * a typed package has it already; one that somehow does not gets an error
  * saying so rather than a pass.
+ *
+ * @since 0.1.0
  */
 export async function unresolvableTypes(options: UnresolvableTypesOptions): Promise<readonly string[]> {
   const ts = await loadTypeScript();
