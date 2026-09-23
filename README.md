@@ -6,7 +6,7 @@ To true something is to bring it into exact alignment — a wheel, a door, a
 frame. That is the brief: every export takes one claim a library makes and holds
 it against what the library actually does.
 
-**Docs:** https://thekhegay.github.io/ngtrue
+**Docs:** https://ngtrue.khegay.dev
 
 ## Who it is for
 

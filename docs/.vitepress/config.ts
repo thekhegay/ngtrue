@@ -20,12 +20,12 @@ const typedocSidebar = JSON.parse(
  * pull request, in an editor, and on the published page, and the build is one
  * static output with one workflow behind it.
  *
- * `base` is the repository name because the site is served from a project page.
+ * `base` is the root: the site is served from ngtrue.khegay.dev, not from a project page.
  */
 export default defineConfig({
   title: 'ngtrue',
   description: 'Checks that keep an Angular library true.',
-  base: '/ngtrue/',
+  base: '/',
   lastUpdated: false,
   cleanUrls: true,
   themeConfig: {
