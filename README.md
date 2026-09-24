@@ -2,11 +2,17 @@
 
 Checks that keep an Angular library true.
 
+[![ngtrue docs](https://img.shields.io/badge/ngtrue.khegay.dev-3451b2)](https://ngtrue.khegay.dev)
+[![npm version](https://img.shields.io/npm/v/ngtrue?color=e21a62)](https://www.npmjs.com/package/ngtrue)
+[![ci](https://img.shields.io/github/actions/workflow/status/thekhegay/ngtrue/ci.yml?branch=main&label=ci)](https://github.com/thekhegay/ngtrue/actions/workflows/ci.yml)
+[![node](https://img.shields.io/node/v/ngtrue)](https://www.npmjs.com/package/ngtrue)
+[![license](https://img.shields.io/npm/l/ngtrue)](https://github.com/thekhegay/ngtrue/blob/main/LICENSE)
+
 To true something is to bring it into exact alignment — a wheel, a door, a
 frame. That is the brief: every export takes one claim a library makes and holds
 it against what the library actually does.
 
-**Docs:** https://ngtrue.khegay.dev
+[Documentation](https://ngtrue.khegay.dev) · [The three entry points](https://ngtrue.khegay.dev/entry-points) · [API reference](https://ngtrue.khegay.dev/api/) · [Deprecation policy](https://ngtrue.khegay.dev/deprecation-policy)
 
 ## Who it is for
 
