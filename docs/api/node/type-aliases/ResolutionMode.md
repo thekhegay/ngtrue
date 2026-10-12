@@ -4,7 +4,7 @@
 
 > **ResolutionMode** = `"node16"` \| `"bundler"`
 
-Defined in: [src/node/unresolvable-types.ts:9](https://github.com/thekhegay/ngtrue/blob/main/src/node/unresolvable-types.ts#L9)
+Defined in: [src/node/unresolvable-types.ts:10](https://github.com/thekhegay/ngtrue/blob/main/src/node/unresolvable-types.ts#L10)
 
 ## Since
 

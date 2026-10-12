@@ -1,0 +1,19 @@
+{
+  "name": "fixture-unexported-wildcard",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./legacy": {
+      "default": "./dist/legacy.js"
+    },
+    "./locales/*": {
+      "types": "./dist/locales/*.d.ts",
+      "default": "./dist/locales/*.js"
+    },
+    "./package.json": "./package.json"
+  }
+}

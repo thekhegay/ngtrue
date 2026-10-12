@@ -1,0 +1,15 @@
+{
+  "name": "fixture-unexported-sound",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./styles": {
+      "sass": "./styles/_index.scss"
+    },
+    "./package.json": "./package.json"
+  }
+}

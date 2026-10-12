@@ -2,11 +2,11 @@ Packages for the checks in `src/node` to be pointed at.
 
 Each is a whole package rather than a mock: the checks read `package.json` and
 the filesystem, so a stub of either would only prove the stub matched what the
-check expected. `sound/` is correct in every way the three checks can measure,
-including the ways a correct package used to get reported — text in its source
-that spells an import, a specifier that names no package (`~/x`), and subpaths
-only a stylesheet compiler can reach; `broken/` is wrong in one way per finding,
-and each fault is one a real build produces — a file the build stopped
+check expected. `sound/` is correct in every way the manifest and source checks
+can measure, including the ways a correct package used to get reported — text in
+its source that spells an import, a specifier that names no package (`~/x`), and
+subpaths only a stylesheet compiler can reach; `broken/` is wrong in one way per
+finding, and each fault is one a real build produces — a file the build stopped
 emitting, a subpath with no `types` condition, a pattern that matches nothing,
 an import nobody declared, a peer nobody imports. `broken/` also puts text that
 only spells an import, and the two shapes a lexer most easily misreads, in front
@@ -34,5 +34,23 @@ alone resolves from its own install rather than from the staged copy.
 `schematics-workspace-root/` is an npm workspace root whose own collection is
 packed only when npm packs the root and not its member. `schematics-bad-name/`
 has a name that would stage the package two directories above the probe.
+
+`unexported-*/` are for `unexportedTypes`, which reads declaration files, so
+each ships a `dist/` of hand-written `.d.ts` in the shape a multi-file `tsc`
+build emits — a type declared in one file and never re-exported by the file a
+subpath points at. `unexported-sound/` and `unexported-broken/` share every
+declaration byte for byte and differ only in the re-export lines;
+`unexported-sibling/` ships the broken `index.d.ts` unchanged and exports the
+missing names from a second subpath, all but one; `unexported-private/` names
+its unexported type only where a consumer is promised nothing, plus once where
+it is, so the walk can be seen to have run; `unexported-empty/` exports only
+what the check skips — a `ɵ`-prefixed constant and a namespace holding one
+`@internal` function — which must be reported rather than passed;
+`unexported-dangling/` is the sound package after a build that stopped emitting
+`types.d.ts`, its `index.d.ts` unchanged; in `unexported-stale/` each
+declaration file is from a different build and imports, by the package's own
+name, something its neighbour did not have yet; `unexported-wildcard/` has a
+type exported only through a pattern subpath and a subpath with no
+declarations, so what is read can be told apart from what is acknowledged.
 
 They are excluded from `tsconfig.build.json` and never published.

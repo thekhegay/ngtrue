@@ -48,6 +48,7 @@ export default defineConfig({
           { text: 'assertSignalFormsControl', link: '/guide/assert-signal-forms-control' },
           { text: 'unresolvedExports', link: '/guide/unresolved-exports' },
           { text: 'unresolvableTypes', link: '/guide/unresolvable-types' },
+          { text: 'unexportedTypes', link: '/guide/unexported-types' },
           { text: 'peerDependencyMismatches', link: '/guide/peer-dependency-mismatches' },
           { text: 'unloadableSchematics', link: '/guide/unloadable-schematics' },
         ],

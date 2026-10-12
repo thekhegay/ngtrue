@@ -98,6 +98,7 @@ array that reads as "its types resolve". Without `exports`, every file in a
 package is importable, so probing the root alone would be one sample of an open
 set, the same reason a wildcard is not probed.
 
-**`typescript` must be installed.** It is an optional peer of ngtrue and this is
-the only export that needs it. Any repository shipping a typed package has it;
-one that somehow does not gets an error saying so, rather than a pass.
+**`typescript` must be installed.** It is an optional peer of ngtrue, needed by
+this export and by [`unexportedTypes`](/guide/unexported-types). Any repository
+shipping a typed package has it; one that somehow does not gets an error saying
+so, rather than a pass.

@@ -69,7 +69,13 @@ evaporate in silence.
 ## `ngtrue/node`
 
 ```ts
-import { peerDependencyMismatches, unloadableSchematics, unresolvableTypes, unresolvedExports } from 'ngtrue/node';
+import {
+  peerDependencyMismatches,
+  unexportedTypes,
+  unloadableSchematics,
+  unresolvableTypes,
+  unresolvedExports,
+} from 'ngtrue/node';
 
 it('ships every file it advertises', () => {
   expect(unresolvedExports({ packageDir: 'dist' })).toEqual([]);
@@ -77,6 +83,10 @@ it('ships every file it advertises', () => {
 
 it('resolves its types the way a consumer will', async () => {
   expect(await unresolvableTypes({ packageDir: 'dist' })).toEqual([]);
+});
+
+it('exports every type its public signatures name', async () => {
+  expect(await unexportedTypes({ packageDir: 'dist' })).toEqual([]);
 });
 
 it('declares what it imports, and imports what it declares', () => {

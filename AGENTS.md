@@ -113,7 +113,7 @@ finding to a boolean.
 | Docs site     | `npm run docs:dev` / `npm run docs:build`                           |
 
 `npm test` depends on `dist/` existing, because `src/node/self.spec.ts` runs the
-three packaging checks against ngtrue's own built package. `pretest` builds it.
+packaging checks against ngtrue's own built package. `pretest` builds it.
 That spec throws rather than skipping when `dist/` is absent — a suite that
 quietly passed with nothing to look at would be green on exactly the runs that
 matter.

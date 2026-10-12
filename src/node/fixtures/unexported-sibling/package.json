@@ -1,0 +1,16 @@
+{
+  "name": "fixture-unexported-sibling",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./types": {
+      "types": "./dist/public-types.d.ts",
+      "default": "./dist/public-types.js"
+    },
+    "./package.json": "./package.json"
+  }
+}
