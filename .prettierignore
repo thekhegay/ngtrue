@@ -9,6 +9,10 @@ docs/.vitepress/cache/
 docs/api/
 .fixtures/
 
+# Written by `scripts/release.mjs` from conventional-changelog, one section per
+# release. Reformatting the old sections would put churn in every release diff.
+CHANGELOG.md
+
 # Bundles written in the shape the Angular package builders emit: tabs, double
 # quotes, and in one fixture every declaration on a single line. The check that
 # reads them reads that text, so formatting it would test a shape no build
