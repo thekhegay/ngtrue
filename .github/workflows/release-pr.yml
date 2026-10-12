@@ -49,6 +49,8 @@ jobs:
         run: npm run release:prepare -- "--bump=$BUMP"
 
       - name: Write the release body
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: npm run release:body -- "--output=$RUNNER_TEMP/release-body.md"
 
       - name: Create release PR

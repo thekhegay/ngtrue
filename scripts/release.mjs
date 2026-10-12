@@ -13,6 +13,11 @@
  * groups by type, links every commit, lifts `BREAKING CHANGE:` notes into their
  * own section, and leaves out the `build(deps)` and `ci` noise a raw log is
  * mostly made of.
+ *
+ * `body` then asks GitHub, through `gh`, what git cannot say: who wrote each
+ * entry and in which pull request, who contributed for the first time, and
+ * the compare link. The names it mentions are what the release page draws its
+ * Contributors avatars from. In CI `gh` reads `GH_TOKEN`.
  */
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -24,6 +29,8 @@ import { ConventionalChangelog } from 'conventional-changelog';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const CHANGELOG = join(ROOT, 'CHANGELOG.md');
 const PACKAGE = join(ROOT, 'package.json');
+const PKG = JSON.parse(readFileSync(PACKAGE, 'utf8'));
+const REPO = /github\.com\/([^/]+\/[^/.]+)/.exec(PKG.repository.url)[1];
 
 const EMOJI = [
   [/break|⚠/, '⚠️'],
@@ -47,7 +54,7 @@ async function prepare(flags) {
 
   // The bump is picked by hand in the Actions tab, so nothing else connects it
   // to the commits. Below 1.0 a breaking change rides a minor, from 1.0 a major.
-  const current = JSON.parse(readFileSync(PACKAGE, 'utf8')).version;
+  const current = PKG.version;
   const floor = current.startsWith('0.') ? ['minor', 'major'] : ['major'];
   const breaking = breakingSince(lastTag());
   if (breaking.length > 0 && !floor.includes(bump)) {
@@ -92,10 +99,13 @@ function body(flags) {
   if (start < 0) fail('CHANGELOG.md has no release section.');
   const end = lines.findIndex((line, i) => i > start && line.startsWith('## '));
 
-  const text = lines
+  const section = lines
     .slice(start + 1, end < 0 ? undefined : end)
     .join('\n')
     .trim()
+    .split('\n')
+    .map(withPullRequest)
+    .join('\n')
     .replace(/^###\s+(.+)$/gm, (_, heading) => {
       // conventional-changelog already puts ⚠ before BREAKING CHANGES.
       const plain = heading.replace(/^⚠️?\s*/, '');
@@ -103,8 +113,61 @@ function body(flags) {
       return `### ${emoji} ${plain}`;
     });
 
+  const text = [section, footer()].filter(Boolean).join('\n\n');
   if (output) writeFileSync(output, `${text}\n`);
   else console.log(text);
+}
+
+// An entry ends in its commit link. A rebase merge leaves no `(#123)` in the
+// subject, so the pull request comes from GitHub's commit-to-PR index, and a
+// commit pushed without one names its author alone.
+function withPullRequest(line) {
+  const sha = /\/commit\/([0-9a-f]{40})\)\)$/.exec(line)?.[1];
+  if (!sha) return line;
+  const pr = gh([
+    `repos/${REPO}/commits/${sha}/pulls`,
+    '--jq',
+    '[.[] | select(.merged_at != null and .base.ref == "main")][0] | if . then "\\(.user.login) \\(.number)" else "" end',
+  ]);
+  if (pr) {
+    const [login, number] = pr.split(' ');
+    return `${line} by @${login} in #${number}`;
+  }
+  const login = gh([`repos/${REPO}/commits/${sha}`, '--jq', '.author.login // ""']);
+  return login ? `${line} by @${login}` : line;
+}
+
+// New Contributors and the compare link, taken from the notes GitHub would
+// generate itself. The release pull request is opened by github-actions, which
+// is not a contributor to anything the section lists.
+function footer() {
+  const tag = `v${PKG.version}`;
+  const previous = execFileSync('git', ['tag', '--sort=-v:refname'], { cwd: ROOT, encoding: 'utf8' })
+    .split('\n')
+    .find(t => /^v\d+\.\d+\.\d+$/.test(t) && t !== tag);
+  const notes = gh([
+    '--method',
+    'POST',
+    `repos/${REPO}/releases/generate-notes`,
+    '-f',
+    `tag_name=${tag}`,
+    '-f',
+    `target_commitish=${process.env.GITHUB_SHA ?? 'main'}`,
+    ...(previous ? ['-f', `previous_tag_name=${previous}`] : []),
+    '--jq',
+    '.body',
+  ]);
+  const newcomers = (notes.split('## New Contributors')[1] ?? '')
+    .split('\n')
+    .filter(line => line.startsWith('* @') && !line.startsWith('* @github-actions[bot]'));
+  const full = /^\*\*Full Changelog\*\*: .+$/m.exec(notes)?.[0];
+  return [newcomers.length ? `### 👋 New Contributors\n\n${newcomers.join('\n')}` : '', full ?? '']
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+function gh(args) {
+  return execFileSync('gh', ['api', ...args], { cwd: ROOT, encoding: 'utf8' }).trim();
 }
 
 function lastTag() {
