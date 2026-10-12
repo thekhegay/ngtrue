@@ -18,6 +18,7 @@ assertion IS the test; here the assertion belongs to the caller.
 
 ## Interfaces
 
+- [GlobalAttributeInputsOptions](interfaces/GlobalAttributeInputsOptions.md)
 - [PeerDependencyMismatchesOptions](interfaces/PeerDependencyMismatchesOptions.md)
 - [UnexportedTypesOptions](interfaces/UnexportedTypesOptions.md)
 - [UnloadableSchematicsOptions](interfaces/UnloadableSchematicsOptions.md)
@@ -30,6 +31,7 @@ assertion IS the test; here the assertion belongs to the caller.
 
 ## Functions
 
+- [globalAttributeInputs](functions/globalAttributeInputs.md)
 - [peerDependencyMismatches](functions/peerDependencyMismatches.md)
 - [unexportedTypes](functions/unexportedTypes.md)
 - [unloadableSchematics](functions/unloadableSchematics.md)

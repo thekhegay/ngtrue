@@ -142,5 +142,7 @@ is [`unresolvableTypes`](/guide/unresolvable-types)'s question.
 Subpaths that are not code — a `sass` or `style` condition, a `.json` target —
 are left out, since no import of them can carry a type.
 
-**`typescript` must be installed.** It is an optional peer of ngtrue; without it
-this throws rather than passing.
+**`typescript` must be installed.** It is an optional peer of ngtrue, needed by
+this export, by [`unresolvableTypes`](/guide/unresolvable-types) and by
+[`globalAttributeInputs`](/guide/global-attribute-inputs); without it this
+throws rather than passing.

@@ -100,9 +100,10 @@ export interface UnresolvableTypesOptions {
  * the reason a wildcard is not probed either.
  *
  * **`typescript` has to be installed.** It is an optional peer dependency of
- * ngtrue, needed by this function and by `unexportedTypes` and by nothing else.
- * Any repository shipping a typed package has it already; one that somehow
- * does not gets an error saying so rather than a pass.
+ * ngtrue, needed by this function, by `unexportedTypes` and by
+ * `globalAttributeInputs`, and by nothing else. Any repository shipping a typed
+ * package has it already; one that somehow does not gets an error saying so
+ * rather than a pass.
  *
  * @since 0.1.0
  */

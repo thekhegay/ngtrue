@@ -30,6 +30,7 @@ rule the package is built around: **no export may import another export.**
 ```ts
 import { assertSignalFormsControl } from 'ngtrue/testing';
 import {
+  globalAttributeInputs,
   peerDependencyMismatches,
   unexportedTypes,
   unloadableSchematics,
@@ -48,6 +49,7 @@ import {
 | [`unexportedTypes`](/guide/unexported-types)                     | `ngtrue/node`    | Can a consumer import every type a public signature names?   |
 | [`peerDependencyMismatches`](/guide/peer-dependency-mismatches)  | `ngtrue/node`    | Does the manifest match what the source imports, both ways?  |
 | [`unloadableSchematics`](/guide/unloadable-schematics)           | `ngtrue/node`    | Can the CLI load every schematic and migration you ship?     |
+| [`globalAttributeInputs`](/guide/global-attribute-inputs)        | `ngtrue/node`    | Does a static `title` meant for an input land on the host?   |
 
 The root entry point is empty. That is deliberate and is explained where it
 would otherwise look like an oversight.
@@ -60,10 +62,12 @@ npm install --save-dev ngtrue
 
 A dev dependency, always: nothing here belongs in a shipped bundle.
 `@angular/core` and `@angular/forms` are optional peers — `ngtrue/testing` needs
-them and `ngtrue/node` does not. So are `typescript`, which two functions use to
-run the real module resolver and type checker rather than an imitation of them,
-and `@angular-devkit/schematics`, which a third uses to load schematics with the
-devkit's own engine.
+them and `ngtrue/node` does not. So is `typescript`, which three functions use:
+`unresolvableTypes` and `unexportedTypes` to run the real module resolver and
+type checker rather than an imitation of them, and `globalAttributeInputs` to
+parse a built package's compiled declarations rather than match their text. So
+is `@angular-devkit/schematics`, which `unloadableSchematics` uses to load
+schematics with the devkit's own engine.
 
 ## What it will not do
 
