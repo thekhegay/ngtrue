@@ -13,6 +13,10 @@
     "./folder": "./dist",
     "./absolute": "dist/index.js",
     "./locales/*": "./dist/locales/*.js",
+    "./theme": {
+      "sass": "./dist/_theme.scss",
+      "default": "./dist/theme.js"
+    },
     "./package.json": "./package.json"
   },
   "peerDependencies": {

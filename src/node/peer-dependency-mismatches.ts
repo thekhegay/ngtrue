@@ -2,6 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { builtinModules } from 'node:module';
 import { join, posix, relative, resolve, sep } from 'node:path';
 
+import { importSpecifiers } from './import-specifiers.js';
 import { dependencyRecord, readManifest } from './manifest.js';
 
 /** Options for {@link peerDependencyMismatches}. */
@@ -17,14 +18,31 @@ export interface PeerDependencyMismatchesOptions {
   /**
    * A build tsconfig whose `exclude` says which files do not ship.
    *
-   * Prefer this to {@link exclude}. The compiler already knows what is left out
-   * of the package, and restating it here means two lists that agree until
-   * someone adds a third kind of test file to one of them.
+   * Prefer this to restating the list in {@link exclude}. The compiler already
+   * knows what is left out of the package, and a second copy means two lists
+   * that agree until someone adds a third kind of test file to one of them.
    */
   readonly tsconfig?: string;
   /**
-   * Glob-ish patterns for files that do not ship, used when `tsconfig` is not
-   * given. `*` matches within a path segment, `**` across segments.
+   * Patterns for files to leave out, relative to `packageDir`. `*` matches
+   * within a path segment, `**` across segments, and a pattern that names a
+   * directory leaves out everything under it — the reading TypeScript gives
+   * its own `exclude`.
+   *
+   * **With `tsconfig`, these are added to its list**, and that is what they are
+   * for there: a subtree that ships and runs inside somebody else's program.
+   * Schematics are the case that needed it. The Angular CLI runs them and
+   * brings `@angular-devkit/schematics` and `@schematics/angular` itself, so a
+   * library imports both from `schematics/` and declares neither — on ngwr
+   * those were two of this check's eleven findings, and its own spec had
+   * skipped the directory for exactly that reason (`SKIP = ['schematics',
+   * 'mcp']`, ngwr faf216cd). The build tsconfig cannot say so, because the
+   * files are not left out of the package; they are left out of this question.
+   * `exclude: ['schematics']` beside `tsconfig` says it.
+   *
+   * **Without `tsconfig`, they replace the default list** — specs, tests,
+   * declaration files and fixtures — so a caller who passes them owns the whole
+   * list.
    */
   readonly exclude?: readonly string[];
   /**
@@ -68,19 +86,61 @@ const DEFAULT_EXCLUDE = ['**/*.spec.ts', '**/*.test.ts', '**/*.d.ts', '**/fixtur
  *
  * ## How imports are found, and what that misses
  *
- * By reading the source text with comments stripped, not by parsing: this runs
- * against `.ts` that may use syntax the running TypeScript does not know yet,
- * and a scanner that throws on a file is worse than one that is approximate.
- * `from '…'`, bare `import '…'`, `import('…')` and `require('…')` are all
- * matched.
+ * By lexing the source rather than parsing it. Comments, string literals,
+ * template text and regular expressions are blanked first, and a string literal
+ * counts only when the CODE in front of it is `from`, a bare `import`, or
+ * `import(` / `require(` with the literal as the whole first argument —
+ * `require` only as a bare identifier, since `this.require('a')` is somebody's
+ * method. Not a parser, because this runs against `.ts` that may use syntax the
+ * installed TypeScript does not know yet and a scanner that throws on a file is
+ * worse than one that is approximate; and not the scanner the compiler offers
+ * for this, `ts.preProcessFile`, which reports `this.require('a')` as an import.
  *
- * What that cannot see is a specifier that is not a literal — a computed
- * `import(name)`, or one assembled from variables. Those are rare in library
- * code and invisible here, so a package reached only that way has to be added
- * by hand or listed in `ignore`.
+ * The first version matched the raw text with comments stripped, and on ngwr's
+ * `projects/lib` ten of its eleven findings were wrong. Eight were TEXT: a
+ * template literal printing `from "${edge.from}"`, schematics writing
+ * `` `import { ${symbol} } from '${subpath}';` `` into a consumer's file, a
+ * `getAttribute('data-from'), getAttribute('data-to')` whose quotes paired
+ * across the comma, and a harness method named `require`. The other two were
+ * the Angular CLI's own packages, which is what `exclude` beside `tsconfig` is
+ * for. The eleventh — `tslib` declared and imported by nothing, in the source
+ * or in the built output — was true, and is still reported.
  *
- * Relative paths, `node:` specifiers, bare Node builtins, subpath imports
- * (`#internal`) and the package's own name are all skipped.
+ * What it cannot see is a specifier that is not a literal — a computed
+ * `import(name)`, `require(base + '/x')`, a template literal with a
+ * substitution. Those are rare in library code and invisible here, so a package
+ * reached only that way has to be added by hand or listed in `ignore`. Nor does
+ * it know which imports a build keeps: an import used only as a type still
+ * counts, though it is erased from the JavaScript, and whether the declarations
+ * a consumer installs still name that package depends on whether the type
+ * reaches the public surface — which this does not look at. A module
+ * augmentation, `declare module 'pkg' { … }`, is not counted either.
+ *
+ * A lexer has to guess whether a `/` divides or opens a regular expression,
+ * and a wrong guess is not always local: through a template literal it can
+ * lose the imports after it and read a later template's text as code. The
+ * guesses are TypeScript-aware — `size()! / 2` divides, a pattern after
+ * `if (…)` is a pattern — and what is left are shapes library code does not
+ * write: a variable named `of` before a division, `{} / 2`, a pattern straight
+ * after `for await (…)`, and a line of JSX text spelling a whole import.
+ *
+ * Skipped: relative and absolute paths, subpath imports (`#internal`), anything
+ * with a scheme (`node:fs`, `data:…`, a bundler's `virtual:…`), bare Node
+ * builtins, the package's own name, and a specifier that cannot be a package
+ * name at all — whitespace, quotes, `${`, a path alias such as `@/x` or `~/x`.
+ * That last filter is ngwr's (faf216cd) and stays behind the lexer on purpose:
+ * text the lexer ever takes for code has to spell a plausible package name to
+ * reach a finding, which `${edge.from}` and `), path.getAttribute(` never do.
+ * An alias that does look like a package — a tsconfig `paths` entry such as
+ * `@app/*` — is read as one, because `paths` is not read; list it in `ignore`.
+ *
+ * ## A scan that read nothing is a finding
+ *
+ * When every file under `sourceDir` is excluded, or none is TypeScript, the
+ * answer is one sentence saying so and nothing else. An empty source set would
+ * otherwise return `[]` for a package that declares nothing — a pass on a
+ * question that was never asked — or report every declared dependency as
+ * unused, which blames the manifest for the configuration.
  *
  * @since 0.1.0
  */
@@ -90,14 +150,24 @@ export function peerDependencyMismatches(options: PeerDependencyMismatchesOption
   const sourceDir = resolve(packageDir, options.sourceDir ?? 'src');
 
   const excluded = matcher(
-    options.tsconfig === undefined ? (options.exclude ?? DEFAULT_EXCLUDE) : excludeFrom(packageDir, options.tsconfig),
+    options.tsconfig === undefined
+      ? (options.exclude ?? DEFAULT_EXCLUDE)
+      : [...excludeFrom(packageDir, options.tsconfig), ...(options.exclude ?? [])],
   );
   const ignored = new Set(options.ignore ?? []);
   const self = typeof manifest.name === 'string' ? manifest.name : null;
 
+  const scanned = sources(sourceDir, packageDir, excluded);
+  if (scanned.length === 0) {
+    return [
+      `no shipped source was read: every TypeScript file under ${relative(packageDir, sourceDir) || '.'} is excluded, ` +
+        'or there is none, so nothing was checked.',
+    ];
+  }
+
   const imported = new Map<string, string[]>();
-  for (const file of sources(sourceDir, packageDir, excluded)) {
-    for (const specifier of specifiersIn(join(packageDir, file))) {
+  for (const file of scanned) {
+    for (const specifier of importSpecifiers(readFileSync(join(packageDir, file), 'utf8'))) {
       const name = packageOf(specifier);
       if (name === null || ignored.has(name)) continue;
       if (self !== null && (name === self || specifier.startsWith(`${self}/`))) continue;
@@ -129,14 +199,25 @@ export function peerDependencyMismatches(options: PeerDependencyMismatchesOption
 
 const BUILTINS = new Set(builtinModules);
 
+/** A specifier with a scheme is a URL — `node:fs`, `data:…`, a bundler's `virtual:…` — and no package. */
+const SCHEME = /^[a-z][a-z\d+.-]*:/i;
+
+/**
+ * A package name, scoped or not, and then any subpath. Anything else in an
+ * import position is an alias or a misread, and neither is a dependency.
+ */
+const SPECIFIER = /^(?:@[a-z\d~-][\w.~-]*\/)?[a-z\d~-][\w.~-]*(?:\/[^\s'"`\\{}]*)?$/i;
+
 /** `@scope/name/deep` and `name/deep` to the package they belong to. */
 function packageOf(specifier: string): string | null {
   if (specifier.startsWith('.') || specifier.startsWith('/') || specifier.startsWith('#')) return null;
-  if (specifier.startsWith('node:')) return null;
+  // `~/` is a source-root alias in several build tools, and npm has not
+  // accepted `~` in a new package name.
+  if (specifier.startsWith('~/')) return null;
+  if (SCHEME.test(specifier) || !SPECIFIER.test(specifier)) return null;
   const parts = specifier.split('/');
   const name = specifier.startsWith('@') ? parts.slice(0, 2).join('/') : (parts[0] as string);
-  if (BUILTINS.has(name)) return null;
-  return name.length === 0 ? null : name;
+  return BUILTINS.has(name) ? null : name;
 }
 
 function sources(dir: string, packageDir: string, excluded: (file: string) => boolean, out: string[] = []): string[] {
@@ -156,22 +237,6 @@ function sources(dir: string, packageDir: string, excluded: (file: string) => bo
     }
   }
   return out;
-}
-
-function specifiersIn(file: string): readonly string[] {
-  // Comments first. A prose sentence or a JSDoc example ending in "… from '"
-  // otherwise reads as an import, and a docblock that names a package it is
-  // warning you against would report that package as a dependency.
-  const source = readFileSync(file, 'utf8')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|\s)\/\/[^\n]*/g, '$1');
-
-  return [
-    ...source.matchAll(/\bfrom\s*['"]([^'"\n]+)['"]/g),
-    ...source.matchAll(/(?:^|\n)\s*import\s*['"]([^'"\n]+)['"]/g),
-    ...source.matchAll(/\bimport\s*\(\s*['"]([^'"\n]+)['"]/g),
-    ...source.matchAll(/\brequire\s*\(\s*['"]([^'"\n]+)['"]/g),
-  ].map(match => match[1] as string);
 }
 
 function excludeFrom(packageDir: string, tsconfig: string): readonly string[] {
@@ -264,16 +329,23 @@ function readJsonWithComments(path: string): string {
  * One pass with the alternation ordered longest-first, and not a chain of
  * `replace` calls: `**\/` expands to `(?:.*\/)?`, which contains a `*` of its
  * own, so a later `*` pass would rewrite its own replacement.
+ *
+ * A match may end at a `/` as well as at the end of the path, because that is
+ * how TypeScript reads `exclude`: `"schematics"` leaves out the directory and
+ * everything in it. Anchoring at the end alone made that pattern match only a
+ * FILE called `schematics`, so the obvious way to write the exclusion did
+ * nothing and said nothing. A leading `./` is dropped for the same reason —
+ * TypeScript accepts it, and the paths compared here never carry one.
  */
 function matcher(patterns: readonly string[]): (file: string) => boolean {
   const expressions = patterns.map(pattern => {
-    const source = pattern.replace(/\*\*\/|\*\*|\*|[.+?^${}()|[\]\\]/g, token => {
+    const source = pattern.replace(/^\.\//, '').replace(/\*\*\/|\*\*|\*|[.+?^${}()|[\]\\]/g, token => {
       if (token === '**/') return '(?:.*/)?';
       if (token === '**') return '.*';
       if (token === '*') return '[^/]*';
       return `\\${token}`;
     });
-    return new RegExp(`^${source}$`);
+    return new RegExp(`^${source}(?:$|/)`);
   });
   return (file: string) => expressions.some(expression => expression.test(file));
 }

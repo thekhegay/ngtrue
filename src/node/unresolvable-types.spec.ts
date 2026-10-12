@@ -35,6 +35,46 @@ describe('unresolvableTypes', () => {
     });
   });
 
+  describe('subpaths only a stylesheet compiler can reach', () => {
+    it('does not probe them: TypeScript matches neither `sass` nor `style`', async () => {
+      // `stylesheets/` exports `.` under `sass` alone. Probed, it would come back
+      // as "does not resolve" under both modes — the ten lines ngwr got for its
+      // Sass entry points and the twelve `@angular/cdk` got for its prebuilt CSS.
+      // Skipped, nothing is left to probe, and that is said rather than passed.
+      expect(await unresolvableTypes({ packageDir: FIXTURES.stylesheets })).toEqual([
+        'no subpath of fixture-stylesheets was probed: `exports` lists none that is not a wildcard, a ' +
+          'stylesheet, `null` or ./package.json, so nothing was checked.',
+      ]);
+    });
+
+    it('probes the rest of a package that also has them', async () => {
+      // `sound/` carries a `sass`-only and a `style`-only subpath beside two
+      // typed ones; the typed ones are still probed and still pass.
+      expect(await unresolvableTypes({ packageDir: FIXTURES.sound })).toEqual([]);
+    });
+
+    it('still probes a subpath with a JavaScript target beside the stylesheet', async () => {
+      // `broken/` exports `./theme` as `{ sass, default }` with no `types`: a
+      // TypeScript import lands on the `.js`, so the condition beside it does
+      // not excuse the missing declarations.
+      const problems = await unresolvableTypes({ packageDir: FIXTURES.broken });
+      const theme = problems.filter(problem => problem.startsWith('@fixture/broken/theme '));
+
+      expect(theme).toHaveLength(2);
+      expect(theme.every(problem => problem.includes('theme.js, which is not a declaration file'))).toBe(true);
+      expect(theme.some(problem => problem.includes('under node16'))).toBe(true);
+      expect(theme.some(problem => problem.includes('under bundler'))).toBe(true);
+    });
+  });
+
+  it('reports a package with no `exports` as unprobed rather than passing it', async () => {
+    // Not "cannot be imported from TypeScript": without `exports` the package
+    // is imported through `main`, so the sentence says what was not done.
+    expect(await unresolvableTypes({ packageDir: FIXTURES.noExports })).toEqual([
+      'fixture-no-exports has no `exports` map, and only the subpaths one declares are probed, so nothing was checked.',
+    ]);
+  });
+
   it('reports a wildcard subpath as unchecked rather than passing it', async () => {
     const problems = await unresolvableTypes({ packageDir: FIXTURES.broken, modes: ['bundler'] });
 
