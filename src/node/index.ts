@@ -16,6 +16,7 @@
  * @packageDocumentation
  */
 
+export { angularPeerFloorsTooLow, type AngularPeerFloorsTooLowOptions } from './angular-peer-floors-too-low.js';
 export { globalAttributeInputs, type GlobalAttributeInputsOptions } from './global-attribute-inputs.js';
 export { peerDependencyMismatches, type PeerDependencyMismatchesOptions } from './peer-dependency-mismatches.js';
 export { unexportedTypes, type UnexportedTypesOptions } from './unexported-types.js';

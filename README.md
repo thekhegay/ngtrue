@@ -30,9 +30,9 @@ here are the ones you only have when other people install your code:
 npm install --save-dev ngtrue
 ```
 
-Always a dev dependency. `@angular/core`, `@angular/forms`, `typescript` and
-`@angular-devkit/schematics` are optional peers — each is needed by one entry
-point, and the entry point that does not need them works without them.
+Always a dev dependency. `@angular/core`, `@angular/forms`, `typescript`,
+`@angular-devkit/schematics` and `semver` are optional peers — each is needed by
+one entry point, and the entry point that does not need them works without them.
 
 ## Three entry points
 
@@ -70,6 +70,7 @@ evaporate in silence.
 
 ```ts
 import {
+  angularPeerFloorsTooLow,
   globalAttributeInputs,
   peerDependencyMismatches,
   unexportedTypes,
@@ -100,6 +101,10 @@ it('ships schematics the CLI can load', async () => {
 
 it('keeps a static title off the host', async () => {
   expect(await globalAttributeInputs({ packageDir: 'dist' })).toEqual([]);
+});
+
+it('admits no Angular that cannot link it', async () => {
+  expect(await angularPeerFloorsTooLow({ packageDir: 'dist' })).toEqual([]);
 });
 ```
 

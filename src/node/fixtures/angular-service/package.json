@@ -1,0 +1,20 @@
+{
+  "name": "@fixture/angular-service",
+  "version": "3.0.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./types/angular-service.d.ts",
+      "default": "./fesm2022/angular-service.mjs"
+    },
+    "./services/*": {
+      "types": "./types/services/*.d.ts",
+      "default": "./fesm2022/services/*.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "@angular/core": "^21.0.0"
+  }
+}

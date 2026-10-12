@@ -9,9 +9,9 @@ import type * as TS from 'typescript';
  *
  * A type-only import, so it is erased from the emitted JavaScript and nothing
  * here loads `typescript` until a check asks for it. That is the whole point of
- * it being an OPTIONAL peer: `unresolvedExports`, `peerDependencyMismatches` and
- * `unloadableSchematics` never touch it, and a repository that only runs those
- * must not need it installed.
+ * it being an OPTIONAL peer: `unresolvedExports`, `peerDependencyMismatches`,
+ * `unloadableSchematics` and `angularPeerFloorsTooLow` never touch it, and a
+ * repository that only runs those must not need it installed.
  */
 export type TypeScript = typeof TS;
 
