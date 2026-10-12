@@ -81,6 +81,11 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=v$version" >> "$GITHUB_OUTPUT"
 
+      # A feat or fix merged after the release pull request was cut would ship
+      # with no line in CHANGELOG.md. The cure is Release PR again, same bump.
+      - name: Check the changelog names everything that ships
+        run: npm run release:check
+
       - run: npm run build
 
       - name: Write the release body
