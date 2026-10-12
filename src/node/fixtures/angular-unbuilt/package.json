@@ -1,0 +1,16 @@
+{
+  "name": "@fixture/angular-unbuilt",
+  "version": "1.0.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./types/angular-unbuilt.d.ts",
+      "default": "./fesm2022/angular-unbuilt.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "@angular/core": ">=15.0.0 <15.0.0"
+  }
+}

@@ -18,6 +18,7 @@ assertion IS the test; here the assertion belongs to the caller.
 
 ## Interfaces
 
+- [AngularPeerFloorsTooLowOptions](interfaces/AngularPeerFloorsTooLowOptions.md)
 - [GlobalAttributeInputsOptions](interfaces/GlobalAttributeInputsOptions.md)
 - [PeerDependencyMismatchesOptions](interfaces/PeerDependencyMismatchesOptions.md)
 - [UnexportedTypesOptions](interfaces/UnexportedTypesOptions.md)
@@ -31,6 +32,7 @@ assertion IS the test; here the assertion belongs to the caller.
 
 ## Functions
 
+- [angularPeerFloorsTooLow](functions/angularPeerFloorsTooLow.md)
 - [globalAttributeInputs](functions/globalAttributeInputs.md)
 - [peerDependencyMismatches](functions/peerDependencyMismatches.md)
 - [unexportedTypes](functions/unexportedTypes.md)

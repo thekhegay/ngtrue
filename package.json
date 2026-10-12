@@ -61,6 +61,7 @@
     "@angular-devkit/schematics": ">=22.0.0",
     "@angular/core": ">=22.0.0",
     "@angular/forms": ">=22.0.0",
+    "semver": "^7.0.0",
     "typescript": ">=5.4.0 <7.0.0"
   },
   "peerDependenciesMeta": {
@@ -71,6 +72,9 @@
       "optional": true
     },
     "@angular/forms": {
+      "optional": true
+    },
+    "semver": {
       "optional": true
     },
     "typescript": {
@@ -87,11 +91,13 @@
     "@angular/platform-browser": "^22.1.7",
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.6.2",
+    "@types/semver": "^7.8.0",
     "eslint": "^10.11.0",
     "eslint-config-prettier": "^10.1.8",
     "jsdom": "^30.1.1",
     "prettier": "^3.9.8",
     "rxjs": "~7.8.2",
+    "semver": "^7.8.5",
     "typedoc": "^0.28.20",
     "typedoc-plugin-markdown": "^4.13.1",
     "typedoc-vitepress-theme": "^1.1.4",

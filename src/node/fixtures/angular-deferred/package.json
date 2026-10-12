@@ -1,0 +1,22 @@
+{
+  "type": "module",
+  "sideEffects": false,
+  "peerDependencies": {
+    "@angular/core": ">=21.0.0"
+  },
+  "name": "@fixture/angular-deferred",
+  "main": "./fesm2022/fixture-angular-deferred.mjs",
+  "module": "./fesm2022/fixture-angular-deferred.mjs",
+  "typings": "./types/fixture-angular-deferred.d.ts",
+  "types": "./types/fixture-angular-deferred.d.ts",
+  "exports": {
+    ".": {
+      "types": "./types/fixture-angular-deferred.d.ts",
+      "default": "./fesm2022/fixture-angular-deferred.mjs"
+    },
+    "./package.json": {
+      "default": "./package.json"
+    }
+  },
+  "version": "2.0.0"
+}

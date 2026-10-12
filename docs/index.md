@@ -30,6 +30,7 @@ rule the package is built around: **no export may import another export.**
 ```ts
 import { assertSignalFormsControl } from 'ngtrue/testing';
 import {
+  angularPeerFloorsTooLow,
   globalAttributeInputs,
   peerDependencyMismatches,
   unexportedTypes,
@@ -50,6 +51,7 @@ import {
 | [`peerDependencyMismatches`](/guide/peer-dependency-mismatches)  | `ngtrue/node`    | Does the manifest match what the source imports, both ways?  |
 | [`unloadableSchematics`](/guide/unloadable-schematics)           | `ngtrue/node`    | Can the CLI load every schematic and migration you ship?     |
 | [`globalAttributeInputs`](/guide/global-attribute-inputs)        | `ngtrue/node`    | Does a static `title` meant for an input land on the host?   |
+| [`angularPeerFloorsTooLow`](/guide/angular-peer-floors-too-low)  | `ngtrue/node`    | Can every Angular the peer range admits link the build?      |
 
 The root entry point is empty. That is deliberate and is explained where it
 would otherwise look like an oversight.
@@ -67,7 +69,8 @@ them and `ngtrue/node` does not. So is `typescript`, which three functions use:
 type checker rather than an imitation of them, and `globalAttributeInputs` to
 parse a built package's compiled declarations rather than match their text. So
 is `@angular-devkit/schematics`, which `unloadableSchematics` uses to load
-schematics with the devkit's own engine.
+schematics with the devkit's own engine, and so is `semver`, which
+`angularPeerFloorsTooLow` uses to read the lowest version a peer range admits.
 
 ## What it will not do
 

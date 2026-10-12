@@ -8,3 +8,9 @@ docs/.vitepress/cache/
 # byte for byte.
 docs/api/
 .fixtures/
+
+# Bundles written in the shape the Angular package builders emit: tabs, double
+# quotes, and in one fixture every declaration on a single line. The check that
+# reads them reads that text, so formatting it would test a shape no build
+# produces.
+src/node/fixtures/angular-*/fesm2022/

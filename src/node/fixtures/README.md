@@ -61,4 +61,18 @@ emits. Every class in them is one route an input can reach a host by — its own
 inherited, exposed by a host directive or by that directive's own host
 directive — or one shape the check has to report rather than pass.
 
+The `angular-*` packages are Angular libraries for `angularPeerFloorsTooLow`,
+each built one with its bundles in the shape the Angular package builders emit.
+`angular-sound/` and `angular-prerelease/` link on every Angular their
+`@angular/core` range admits. `angular-floor-low/` has the range
+dmacfarlane/angular-mentions#238 reported, with the declaration that breaks it
+in a chunk only a relative import reaches. `angular-service/` has an
+`ɵɵngDeclareService` behind a wildcard subpath, under a range that admits 21.
+`angular-deferred/` is a real `@angular/build:library` build whose `@defer`
+block put the same kind of service in a chunk only `import()` reaches.
+`angular-full/` is a full-compilation build with no declarations to read,
+`angular-unreadable/` holds what the check has to report rather than skip, and
+`angular-unbuilt/` is a manifest checked before its build ran, under a range no
+version satisfies.
+
 They are excluded from `tsconfig.build.json` and never published.
