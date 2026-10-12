@@ -4,7 +4,7 @@
 
 > **assertSignalFormsControl**\<`T`\>(`subject`, `options?`): `Promise`\<`void`\>
 
-Defined in: [src/testing/signal-forms-control.ts:237](https://github.com/thekhegay/ngtrue/blob/main/src/testing/signal-forms-control.ts#L237)
+Defined in: [src/testing/signal-forms-control.ts:281](https://github.com/thekhegay/ngtrue/blob/main/src/testing/signal-forms-control.ts#L281)
 
 Assert that a candidate control is wired to Angular's Signal Forms, and fail
 naming the rule that broke.
@@ -47,14 +47,34 @@ warning and a field that goes on looking editable. A library shipping a
 control to other people does not get to leave those three to chance, so
 ngtrue requires all three.
 
+`focus()` is optional in the same way and fails in the same silence. When a
+control declares none, Angular focuses the host element instead, and on a
+custom element with no tab stop that does nothing at all — so
+`focusBoundControl()`, which a form calls to take the user to the first
+invalid field after a failed submit, returns normally and leaves focus on the
+submit button. ngtrue does not require the method, because a host that IS the
+interactive element is focused correctly without one; it requires the
+outcome, which is that focus lands inside the control.
+
+That rule was asked for by other people before it was written here.
+[tutkli/forty-cdk#1149](https://github.com/tutkli/forty-cdk/issues/1149)
+found focus-on-error working in three of about fourteen form primitives,
+each of the rest focusing a host wrapper that could not take it.
+[ngx-signal-forms/ngx-signal-forms#434](https://github.com/ngx-signal-forms/ngx-signal-forms/issues/434)
+calls `focusBoundControl()` a silent no-op for a field with no focusable
+binding, and had to detect the miss at run time on the consumer's side. ngwr
+shipped twenty value controls with no tab stop on the host, and only the
+editor, in `e559a807`, declares the `focus()` that Signal Forms calls.
+
 ## What it checks
 
 Six rules are read off the runtime directive definitions, which is where
 Angular reads them: a `value` or `checked` `model()`, exactly one of the two,
 no `ControlValueAccessor` competing for the binding, and inputs named
-`disabled` and `readonly` beside an output named `touch`. Two more are driven
-through the bound field: the value must cross in both directions, and `touch`
-must actually mark the field touched.
+`disabled` and `readonly` beside an output named `touch`. Three more are
+driven through the bound field: the value must cross in both directions,
+`touch` must actually mark the field touched, and asking the field to focus
+its control must leave focus on the host element or inside it.
 
 Every name is matched as Angular matches it — by the PUBLIC binding name, not
 the class property. `value = model('', { alias: 'val' })` is a control
@@ -88,6 +108,9 @@ follow Angular's resolution rather than any one class:
 - **`single-model` counts the template's directives, not host directives.** A
   host directive's unexposed model is invisible to Angular, so it is not a
   rival to the component's.
+- **`focus` is the control's own.** Angular calls it on the directive the
+  template matched, even when the model is exposed from beneath, and never
+  on a host directive: a method cannot be exposed the way an input can.
 
 Reading it this way has three limits, and the driven rules cover only part of
 them: the round trip and the touch probe go through what Angular actually
@@ -159,15 +182,35 @@ that updates the field when you type and forgets to when you pick from its
 own panel passes this and is broken. That needs the control's own
 interactions and belongs in the control's own spec.
 
+**The focus rule proves focus arrived, not that it arrived somewhere
+useful.** jsdom has no layout, so it cannot tell a visible target from one
+nobody can see: a target clipped to nothing, moved off-screen, zero-sized or
+`visibility: hidden` still takes focus here, and `display: none` stops it
+only where jsdom's own cascade resolves the declaration. Nor does the rule
+look at what took focus. A `focus()` that lands on a wrapper with
+`tabindex="-1"` passes, while a keyboard user can never tab back to that
+wrapper and a screen reader announces a nameless group instead of the field.
+Whether focus reaches the element that takes input, and whether that element
+is visible, stays a reviewer's job.
+
+It also waits for exactly one thing after the call: the render that follows
+it. A `focus()` that defers to `afterNextRender` passes; one that defers to
+`setTimeout` is reported as a miss, though focus would arrive later in an
+application. No timer is awaited, which is what keeps the rule usable under
+fake timers — and it means a control that takes focus BACK on a timer after
+being blurred is not seen by the starting-point check either.
+
 ## The fixture is spent afterwards
 
-The value is written twice and the field is marked touched, with no attempt
-to put either back: a restore that silently failed would leave a later
-assertion reading a value this function chose. Give it a fixture of its own,
-bound to a field the schema leaves interactive: Signal Forms reads `touched`
-as false on a hidden, disabled or read-only field whatever has been marked,
-so the last rule refuses such a fixture rather than blaming the control for
-it.
+The value is written twice, the field is marked touched and focus is moved
+into the control, with no attempt to put any of it back: a restore that
+silently failed would leave a later assertion reading a value this function
+chose. Give it a fixture of its own, attached to the document the way
+`TestBed.createComponent` attaches it — nothing detached can take focus —
+and bound to a field the schema leaves interactive: Signal Forms reads
+`touched` as false on a hidden, disabled or read-only field whatever has been
+marked, so the touch rule refuses such a fixture rather than blaming the
+control for it.
 
 ## Type Parameters
 

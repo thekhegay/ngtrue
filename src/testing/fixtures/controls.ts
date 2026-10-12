@@ -7,37 +7,76 @@
  * catching what the compiler already catches — the point of each is that it
  * compiles, renders, and is quietly not a control.
  *
+ * A broken control that fails an early rule keeps its bare `<span>` and is not
+ * made focusable. The assertion stops at the first rule that breaks, so the
+ * focus rule, which runs last, never reaches it.
+ *
  * These are compiled by the test run and never by `tsc -p tsconfig.build.json`:
  * they are the only components in the repository, and they exist so the suite
  * can be pointed at something.
  */
-import { Component, Directive, effect, forwardRef, inject, input, model, output } from '@angular/core';
+import {
+  afterNextRender,
+  Component,
+  DestroyRef,
+  Directive,
+  DOCUMENT,
+  effect,
+  ElementRef,
+  forwardRef,
+  inject,
+  Injector,
+  input,
+  model,
+  output,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { NG_VALUE_ACCESSOR, type ControlValueAccessor } from '@angular/forms';
 import type { FormCheckboxControl, FormValueControl } from '@angular/forms/signals';
 
-/** A control that satisfies every rule. */
-@Component({ selector: 'good-text', template: '<span>{{ value() }}</span>' })
+/**
+ * A control that satisfies every rule. Its host is a custom element, which
+ * takes no focus, so it forwards `focus()` to the element that takes input.
+ */
+@Component({ selector: 'good-text', template: '<input #el />' })
 export class GoodText implements FormValueControl<unknown> {
   readonly value = model<unknown>('');
   readonly disabled = input(false);
   readonly readonly = input(false);
   readonly touch = output<void>();
+  private readonly field = viewChild.required<ElementRef<HTMLInputElement>>('el');
+
+  focus(options?: FocusOptions): void {
+    this.field().nativeElement.focus(options);
+  }
 }
 
 /** The checkbox half of the contract, which takes the other model name. */
-@Component({ selector: 'good-toggle', template: '<span>{{ checked() }}</span>' })
+@Component({ selector: 'good-toggle', template: '<input #el type="checkbox" />' })
 export class GoodToggle implements FormCheckboxControl {
   readonly checked = model(false);
   readonly disabled = input(false);
   readonly readonly = input(false);
   readonly touch = output<void>();
+  private readonly field = viewChild.required<ElementRef<HTMLInputElement>>('el');
+
+  focus(options?: FocusOptions): void {
+    this.field().nativeElement.focus(options);
+  }
 }
 
 /**
  * A control on someone else's element rather than on a tag of its own, so the
  * suite is held to finding a control that is not the node's component.
+ *
+ * It declares no `focus()` and needs none: the element it sits on IS the
+ * interactive one, and a tab stop makes it focusable, so Angular's fallback —
+ * focusing the host — lands. That is the other way to pass the focus rule, and
+ * the reason the rule asks where focus went rather than whether the method
+ * exists.
  */
-@Directive({ selector: '[goodAttribute]' })
+@Directive({ selector: '[goodAttribute]', host: { tabindex: '0' } })
 export class GoodAttribute implements FormValueControl<unknown> {
   readonly value = model<unknown>('');
   readonly disabled = input(false);
@@ -52,18 +91,23 @@ export class GoodAttribute implements FormValueControl<unknown> {
  * this, and it is the one shape the round trip cannot tell apart from a broken
  * binding on its own — which is what `values` is for.
  */
-@Component({ selector: 'coerces-value', template: '<span>{{ value() }}</span>' })
+@Component({ selector: 'coerces-value', template: '<input #el />' })
 export class CoercesValue implements FormValueControl<string> {
   readonly value = model('');
   readonly disabled = input(false);
   readonly readonly = input(false);
   readonly touch = output<void>();
+  private readonly field = viewChild.required<ElementRef<HTMLInputElement>>('el');
 
   constructor() {
     effect(() => {
       const incoming: unknown = this.value();
       if (typeof incoming !== 'string') this.value.set(String(incoming));
     });
+  }
+
+  focus(options?: FocusOptions): void {
+    this.field().nativeElement.focus(options);
   }
 }
 
@@ -178,6 +222,13 @@ export class NoReadonly implements FormValueControl<unknown> {
 // host's own members plus whatever its host directives EXPOSE. A member a host
 // directive declares and does not expose is never written and never listened
 // to, however plainly it sits in that directive's class.
+//
+// Those that pass every rule carry a tab stop on the host, so Angular's
+// fallback — focusing the host — satisfies the focus rule, which runs after all
+// the rules they are here for. A tab stop rather than a forwarded `focus()`
+// keeps each class down to the members its composition is about.
+// ModelFromHost forwards `focus()` instead, because there it says something:
+// its model belongs to a host directive, and `focus` is still the component's.
 
 /** The state half of a control, written once and composed into each control. */
 @Directive()
@@ -190,6 +241,7 @@ export class ControlState {
 @Component({
   selector: 'exposed-state',
   template: '<span>{{ value() }}</span>',
+  host: { tabindex: '0' },
   hostDirectives: [{ directive: ControlState, inputs: ['disabled', 'readonly'] }],
 })
 export class ExposedState implements FormValueControl<unknown> {
@@ -210,10 +262,17 @@ export class ScoreState {
   readonly blurred = output<void>();
 }
 
-/** The whole control in a host directive, every name exposed, some of them under an alias. */
+/**
+ * The whole control in a host directive, every name exposed, some of them under
+ * an alias.
+ *
+ * Everything but `focus()`, which only the component can supply: Angular
+ * registers the directive the template matched — this component, though its
+ * model is `ScoreState`'s — and calls `focus` on that.
+ */
 @Component({
   selector: 'model-from-host',
-  template: '<span>{{ state.score() }}</span>',
+  template: '<span>{{ state.score() }}</span><input #el />',
   hostDirectives: [
     {
       directive: ScoreState,
@@ -224,6 +283,11 @@ export class ScoreState {
 })
 export class ModelFromHost {
   readonly state = inject(ScoreState);
+  private readonly field = viewChild.required<ElementRef<HTMLInputElement>>('el');
+
+  focus(options?: FocusOptions): void {
+    this.field().nativeElement.focus(options);
+  }
 }
 
 /**
@@ -247,6 +311,7 @@ export class WholeControl {
 @Component({
   selector: 'shadowed-model',
   template: '<span>{{ value() }}</span>',
+  host: { tabindex: '0' },
   hostDirectives: [WholeControl],
 })
 export class ShadowedModel implements FormValueControl<unknown> {
@@ -295,6 +360,7 @@ export class HalfExposedModel {}
 @Component({
   selector: 'relayed-state',
   template: '<span>{{ value() }}</span>',
+  host: { tabindex: '0' },
   hostDirectives: [forwardRef(() => StateRelay)],
 })
 export class RelayedState implements FormValueControl<unknown> {
@@ -325,6 +391,7 @@ export class ReadonlyBehaviour {}
 @Component({
   selector: 'diamond-state',
   template: '<span>{{ value() }}</span>',
+  host: { tabindex: '0' },
   hostDirectives: [
     { directive: forwardRef(() => ControlState), inputs: ['disabled'] },
     forwardRef(() => ReadonlyBehaviour),
@@ -347,6 +414,7 @@ export class SharedBehaviour {}
 @Component({
   selector: 'uses-shared',
   template: '<span>{{ value() }}</span>',
+  host: { tabindex: '0' },
   hostDirectives: [SharedBehaviour],
 })
 export class UsesShared implements FormValueControl<unknown> {
@@ -380,6 +448,7 @@ export class TouchSource {
 @Component({
   selector: 'touch-from-host',
   template: '<span>{{ value() }}</span>',
+  host: { tabindex: '0' },
   hostDirectives: [{ directive: TouchSource, outputs: ['touch'] }],
 })
 export class TouchFromHost implements FormValueControl<unknown> {
@@ -412,6 +481,7 @@ export class AliasedState {
 @Component({
   selector: 'aliased-exposure',
   template: '<span>{{ value() }}</span>',
+  host: { tabindex: '0' },
   hostDirectives: [
     { directive: forwardRef(() => AliasedState), inputs: ['isDisabled: disabled', 'isReadonly: readonly'] },
   ],
@@ -439,6 +509,139 @@ export class CheckedState {
   hostDirectives: [{ directive: CheckedState, inputs: ['checked'], outputs: ['checkedChange'] }],
 })
 export class ValueAndExposedChecked {
+  readonly value = model<unknown>('');
+  readonly disabled = input(false);
+  readonly readonly = input(false);
+  readonly touch = output<void>();
+}
+
+/**
+ * Everything but `focus()`, on a host with no tab stop — the shape nineteen of
+ * ngwr's twenty value controls had. Angular falls back to focusing the host, a
+ * custom element takes no focus, and `focusBoundControl()` returns having done
+ * nothing. The input it would have wanted focused is right there in the
+ * template, which is what makes the omission easy to miss.
+ */
+@Component({ selector: 'no-focus', template: '<input #el />' })
+export class NoFocus implements FormValueControl<unknown> {
+  readonly value = model<unknown>('');
+  readonly disabled = input(false);
+  readonly readonly = input(false);
+  readonly touch = output<void>();
+}
+
+/**
+ * A click-to-edit control whose `focus()` was written as though its input were
+ * always rendered. The input exists only while editing, so the required query
+ * throws NG0951 — out of `focusBoundControl()`, and out of the submit handler
+ * that called it.
+ */
+@Component({
+  selector: 'focus-throws',
+  template: '@if (editing()) { <input #el /> } @else { <span>{{ value() }}</span> }',
+})
+export class FocusThrows implements FormValueControl<unknown> {
+  readonly value = model<unknown>('');
+  readonly disabled = input(false);
+  readonly readonly = input(false);
+  readonly touch = output<void>();
+  protected readonly editing = signal(false);
+  private readonly field = viewChild.required<ElementRef<HTMLInputElement>>('el');
+
+  focus(options?: FocusOptions): void {
+    this.field().nativeElement.focus(options);
+  }
+}
+
+/**
+ * The same click-to-edit control done right: `focus()` switches to edit mode
+ * and focuses the input once the render that creates it has run. Focus arrives
+ * a render later than the call, which a rule reading the document straight
+ * after calling would report as a miss.
+ */
+@Component({
+  selector: 'focus-after-render',
+  template: '@if (editing()) { <input #el /> } @else { <span>{{ value() }}</span> }',
+})
+export class FocusAfterRender implements FormValueControl<unknown> {
+  readonly value = model<unknown>('');
+  readonly disabled = input(false);
+  readonly readonly = input(false);
+  readonly touch = output<void>();
+  protected readonly editing = signal(false);
+  private readonly field = viewChild<ElementRef<HTMLInputElement>>('el');
+  private readonly injector = inject(Injector);
+
+  focus(options?: FocusOptions): void {
+    this.editing.set(true);
+    afterNextRender(() => this.field()?.nativeElement.focus(options), { injector: this.injector });
+  }
+}
+
+/**
+ * A select whose `focus()` opens its panel and focuses the search field in it,
+ * where the panel — like every overlay — is rendered at the end of `<body>`
+ * rather than inside the control. Focus does move, so a rule asking only
+ * whether it left `<body>` would pass this; the trigger the field belongs to
+ * never has it, and the user lands in a popup instead of on the field.
+ */
+@Component({ selector: 'focus-escapes', template: '<button type="button">{{ value() }}</button>' })
+export class FocusEscapes implements FormValueControl<unknown> {
+  readonly value = model<unknown>('');
+  readonly disabled = input(false);
+  readonly readonly = input(false);
+  readonly touch = output<void>();
+  private readonly document = inject(DOCUMENT);
+  private readonly search = this.document.createElement('input');
+
+  constructor() {
+    inject(DestroyRef).onDestroy(() => this.search.remove());
+  }
+
+  focus(options?: FocusOptions): void {
+    this.document.body.append(this.search);
+    this.search.focus(options);
+  }
+}
+
+/**
+ * A field that takes focus when it renders and takes it back whenever it is
+ * left: a keyboard trap. It declares no `focus()` and its host has no tab stop,
+ * so the field cannot actually focus it — and with focus already inside, a
+ * probe that did not check where focus STARTED would pass it anyway.
+ */
+@Component({ selector: 'holds-focus', template: '<input #el (blur)="el.focus()" />' })
+export class HoldsFocus implements FormValueControl<unknown> {
+  readonly value = model<unknown>('');
+  readonly disabled = input(false);
+  readonly readonly = input(false);
+  readonly touch = output<void>();
+  private readonly field = viewChild.required<ElementRef<HTMLInputElement>>('el');
+
+  constructor() {
+    afterNextRender(() => this.field().nativeElement.focus());
+  }
+}
+
+/**
+ * A shared behaviour that forwards focus to the first `<input>` in its host — a
+ * `focus()` written once and composed into every control, the way the state
+ * directives above are. Angular never calls it. The binding it registers is the
+ * directive the template matched, `focus` is read off that alone, and unlike an
+ * input or an output a method cannot be exposed.
+ */
+@Directive()
+export class FocusForwarder {
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  focus(options?: FocusOptions): void {
+    this.host.nativeElement.querySelector('input')?.focus(options);
+  }
+}
+
+/** A complete control whose only `focus()` is {@link FocusForwarder}'s. */
+@Component({ selector: 'focus-from-host', template: '<input />', hostDirectives: [FocusForwarder] })
+export class FocusFromHost implements FormValueControl<unknown> {
   readonly value = model<unknown>('');
   readonly disabled = input(false);
   readonly readonly = input(false);

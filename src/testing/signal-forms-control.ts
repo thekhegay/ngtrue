@@ -24,7 +24,8 @@ export type SignalFormsControlRule =
   | 'disabled-input'
   | 'readonly-input'
   | 'value-round-trip'
-  | 'touch-marks-touched';
+  | 'touch-marks-touched'
+  | 'focus-reaches-control';
 
 /** Thrown by {@link assertSignalFormsControl}, carrying the rule that broke. */
 /** @since 0.1.0 */
@@ -105,14 +106,34 @@ export interface SignalFormsControlOptions {
  * control to other people does not get to leave those three to chance, so
  * ngtrue requires all three.
  *
+ * `focus()` is optional in the same way and fails in the same silence. When a
+ * control declares none, Angular focuses the host element instead, and on a
+ * custom element with no tab stop that does nothing at all — so
+ * `focusBoundControl()`, which a form calls to take the user to the first
+ * invalid field after a failed submit, returns normally and leaves focus on the
+ * submit button. ngtrue does not require the method, because a host that IS the
+ * interactive element is focused correctly without one; it requires the
+ * outcome, which is that focus lands inside the control.
+ *
+ * That rule was asked for by other people before it was written here.
+ * [tutkli/forty-cdk#1149](https://github.com/tutkli/forty-cdk/issues/1149)
+ * found focus-on-error working in three of about fourteen form primitives,
+ * each of the rest focusing a host wrapper that could not take it.
+ * [ngx-signal-forms/ngx-signal-forms#434](https://github.com/ngx-signal-forms/ngx-signal-forms/issues/434)
+ * calls `focusBoundControl()` a silent no-op for a field with no focusable
+ * binding, and had to detect the miss at run time on the consumer's side. ngwr
+ * shipped twenty value controls with no tab stop on the host, and only the
+ * editor, in `e559a807`, declares the `focus()` that Signal Forms calls.
+ *
  * ## What it checks
  *
  * Six rules are read off the runtime directive definitions, which is where
  * Angular reads them: a `value` or `checked` `model()`, exactly one of the two,
  * no `ControlValueAccessor` competing for the binding, and inputs named
- * `disabled` and `readonly` beside an output named `touch`. Two more are driven
- * through the bound field: the value must cross in both directions, and `touch`
- * must actually mark the field touched.
+ * `disabled` and `readonly` beside an output named `touch`. Three more are
+ * driven through the bound field: the value must cross in both directions,
+ * `touch` must actually mark the field touched, and asking the field to focus
+ * its control must leave focus on the host element or inside it.
  *
  * Every name is matched as Angular matches it — by the PUBLIC binding name, not
  * the class property. `value = model('', { alias: 'val' })` is a control
@@ -146,6 +167,9 @@ export interface SignalFormsControlOptions {
  * - **`single-model` counts the template's directives, not host directives.** A
  *   host directive's unexposed model is invisible to Angular, so it is not a
  *   rival to the component's.
+ * - **`focus` is the control's own.** Angular calls it on the directive the
+ *   template matched, even when the model is exposed from beneath, and never
+ *   on a host directive: a method cannot be exposed the way an input can.
  *
  * Reading it this way has three limits, and the driven rules cover only part of
  * them: the round trip and the touch probe go through what Angular actually
@@ -217,15 +241,35 @@ export interface SignalFormsControlOptions {
  * own panel passes this and is broken. That needs the control's own
  * interactions and belongs in the control's own spec.
  *
+ * **The focus rule proves focus arrived, not that it arrived somewhere
+ * useful.** jsdom has no layout, so it cannot tell a visible target from one
+ * nobody can see: a target clipped to nothing, moved off-screen, zero-sized or
+ * `visibility: hidden` still takes focus here, and `display: none` stops it
+ * only where jsdom's own cascade resolves the declaration. Nor does the rule
+ * look at what took focus. A `focus()` that lands on a wrapper with
+ * `tabindex="-1"` passes, while a keyboard user can never tab back to that
+ * wrapper and a screen reader announces a nameless group instead of the field.
+ * Whether focus reaches the element that takes input, and whether that element
+ * is visible, stays a reviewer's job.
+ *
+ * It also waits for exactly one thing after the call: the render that follows
+ * it. A `focus()` that defers to `afterNextRender` passes; one that defers to
+ * `setTimeout` is reported as a miss, though focus would arrive later in an
+ * application. No timer is awaited, which is what keeps the rule usable under
+ * fake timers — and it means a control that takes focus BACK on a timer after
+ * being blurred is not seen by the starting-point check either.
+ *
  * ## The fixture is spent afterwards
  *
- * The value is written twice and the field is marked touched, with no attempt
- * to put either back: a restore that silently failed would leave a later
- * assertion reading a value this function chose. Give it a fixture of its own,
- * bound to a field the schema leaves interactive: Signal Forms reads `touched`
- * as false on a hidden, disabled or read-only field whatever has been marked,
- * so the last rule refuses such a fixture rather than blaming the control for
- * it.
+ * The value is written twice, the field is marked touched and focus is moved
+ * into the control, with no attempt to put any of it back: a restore that
+ * silently failed would leave a later assertion reading a value this function
+ * chose. Give it a fixture of its own, attached to the document the way
+ * `TestBed.createComponent` attaches it — nothing detached can take focus —
+ * and bound to a field the schema leaves interactive: Signal Forms reads
+ * `touched` as false on a hidden, disabled or read-only field whatever has been
+ * marked, so the touch rule refuses such a fixture rather than blaming the
+ * control for it.
  *
  * @throws {SignalFormsControlError} naming the first rule that broke. First
  *   rather than all of them, because the later rules cannot be evaluated until
@@ -384,7 +428,8 @@ export async function assertSignalFormsControl<T>(
     );
   }
 
-  // 8. `touch` reaches the field. Last, because it cannot be undone.
+  // 8. `touch` reaches the field. After the round trip, because it cannot be
+  // undone.
   //
   // Two states of the FIELD make this unanswerable, and each is refused rather
   // than reported against the control: a field that cannot be touched, and one
@@ -430,6 +475,133 @@ export async function assertSignalFormsControl<T>(
         'replaced after Angular subscribed to the one the instance started with.',
     );
   }
+
+  // 9. Focus reaches the control. After `touch`, because moving focus in and
+  // out of a control is exactly what makes a conforming one emit `touch`, and
+  // the touch rule needs a field nobody has touched yet.
+  await requireFocusReachesControl(fixture, control, node);
+}
+
+/**
+ * Rule 9: ask the field to focus its control, and look at where focus went.
+ *
+ * It calls `focus()` on the candidate's own `FormField`, which is the call
+ * `focusBoundControl()` ends in — the field state picks its first binding in
+ * DOM order and calls exactly this. Going through the state instead would let
+ * a second binding of the same field, earlier in the template, answer for the
+ * candidate.
+ *
+ * Angular's half is short: the control's `focus` member when it has one,
+ * otherwise `focus()` on the host element. Neither says anything when nothing
+ * happens, which is why the outcome is read off the document rather than
+ * inferred from which branch ran.
+ *
+ * Two guards keep a pass meaningful. Focus has to START outside the host — it
+ * is blurred first, and the rule refuses to go on if it will not leave —
+ * because a probe that begins with focus inside answers yes for a `focus()`
+ * that does nothing at all. And the host has to be attached, because nothing
+ * detached can take focus: a detached fixture would fail a sound control, for
+ * a reason that belongs to the fixture.
+ */
+async function requireFocusReachesControl<T>(
+  fixture: ComponentFixture<T>,
+  control: LocatedControl,
+  node: DebugElement,
+): Promise<void> {
+  const host = node.nativeElement as Element;
+  if (!host.isConnected) {
+    throw new SignalFormsControlError(
+      'focus-reaches-control',
+      control.label,
+      'The control is not attached to a document, and nothing detached can take focus, so this\n' +
+        'rule would fail a sound control for a reason that belongs to the fixture.\n\n' +
+        '`TestBed.createComponent` attaches what it creates. Give this assertion a fixture that is\n' +
+        'still in the document — not one whose element was removed, nor one built by a\n' +
+        'TestComponentRenderer that never inserts it.',
+    );
+  }
+
+  const ownerDocument = host.ownerDocument;
+  blur(ownerDocument.activeElement);
+  await flush(fixture);
+  if (contains(host, ownerDocument.activeElement)) {
+    throw new SignalFormsControlError(
+      'focus-reaches-control',
+      control.label,
+      `Focus was already inside ${control.name} and blurring it did not move it out, so a pass\n` +
+        'would have meant nothing: a `focus()` that does nothing at all leaves focus exactly where\n' +
+        'it found it.\n\n' +
+        'Either something inside takes focus back as it leaves — a blur handler that calls\n' +
+        '`focus()` again, which is a keyboard trap (WCAG 2.1.2) wherever it happens — or focus\n' +
+        "sits inside the control's shadow root, which blurring the host it is reported as does\n" +
+        'not reach.',
+    );
+  }
+
+  try {
+    control.formField.focus();
+  } catch (error) {
+    throw new SignalFormsControlError(
+      'focus-reaches-control',
+      control.label,
+      `Asking the field to focus ${control.name} threw, so \`focusBoundControl()\` throws as well —\n` +
+        'out of whatever submit handler called it to take the user to the first invalid field.\n\n' +
+        'The usual cause is a `focus()` reaching for an element that is not rendered yet, such as\n' +
+        'a required view query read while its `@if` is false. Render first and focus after.\n' +
+        "Angular's own words follow.\n\n" +
+        indent(messageOf(error)),
+    );
+  }
+  // Flushed before reading, because a `focus()` may rightly finish in a render
+  // hook: one that switches an inline editor into edit mode has to wait for the
+  // input it is about to focus to exist.
+  await flush(fixture);
+
+  const landed = ownerDocument.activeElement;
+  if (contains(host, landed)) return;
+
+  // Truthiness, because that is the test Angular applies when it registers the
+  // binding: a `focus` member holding `null` is no member at all, and Angular
+  // falls back to the host. `!== undefined` would print the wrong explanation.
+  // Read off the control itself, which is the instance Angular registers: a
+  // `focus` on one of its host directives is never looked at, and is named
+  // below so the explanation does not call a method missing that is right there.
+  const declaresFocus = Boolean(read(node, { declaredOn: control.type, property: 'focus' }));
+  const focusOnHosts = declaresFocus
+    ? []
+    : hostDirectivesOf(definitionOf(control.type) as DirectiveDefinition)
+        .map(host => host.type)
+        .filter(type => Boolean(read(node, { declaredOn: type, property: 'focus' })));
+  throw new SignalFormsControlError(
+    'focus-reaches-control',
+    control.label,
+    `The field was asked to focus ${control.name}, and focus is on ${where(landed)}.\n\n` +
+      (declaresFocus
+        ? `${control.name} declares \`focus\` and Angular called it, but focus did not end up on the\n` +
+          'host or inside it. Either it focused something that cannot take focus — not rendered\n' +
+          'yet, disabled, hidden, detached, or a host with no tab stop — or it moved focus outside\n' +
+          "the host, to an overlay panel, say, which leaves the field's own element unfocused. A\n" +
+          'signal input named `focus` is the quiet version of this: Angular calls whatever the\n' +
+          'member holds, and reading an input moves nothing.\n\n' +
+          'Focus that arrives from a timer is reported here too. This rule waits for the render\n' +
+          'after the call and nothing later, so a `focus()` deferred with `setTimeout` reads as a\n' +
+          'miss; `afterNextRender` is the deferral it waits for.\n\n' +
+          'Forward it to the element inside the host that takes input.'
+        : `${control.name} declares no \`focus()\`, so Angular fell back to focusing the host element,\n` +
+          'and the host did not take it. An element that is not a form control and has no tab\n' +
+          'stop — a custom element, a `<div>` — is not focusable, and the call does nothing without\n' +
+          'saying so: `focusBoundControl()`, which a form calls to take the user to the first\n' +
+          'invalid field after a failed submit, returns normally and leaves them where they were.\n\n' +
+          (focusOnHosts.length === 0
+            ? ''
+            : `\`focus\` is declared on ${list(focusOnHosts.map(type => type.name))}, a host directive of ${control.name}, and\n` +
+              'Angular never calls it: it registers the directive the template matched and reads\n' +
+              '`focus` off that alone. An input or an output can be exposed from a host directive;\n' +
+              `a method cannot, so what follows applies to ${control.name} itself.\n\n`) +
+          'Declare `focus(options?: FocusOptions)` and forward it to the element that takes input,\n' +
+          '`this.input().nativeElement.focus(options)`. A tab stop on the host is the fix only when\n' +
+          'the host itself is the interactive element — a `role="slider"` host, say.'),
+  );
 }
 
 const MODEL_KINDS = ['value', 'checked'] as const;
@@ -956,6 +1128,18 @@ function probeValues(
   if (supplied !== undefined) return supplied;
   if (kind === 'checked' || typeof current === 'boolean') return [!current, current];
   return [{ ngtrue: 'probe-a' }, { ngtrue: 'probe-b' }];
+}
+
+function blur(element: Element | null): void {
+  (element as { blur?: () => void } | null)?.blur?.();
+}
+
+function contains(host: Element, element: Element | null): boolean {
+  return element !== null && host.contains(element);
+}
+
+function where(element: Element | null): string {
+  return element === null ? 'nothing at all' : `<${element.tagName.toLowerCase()}>`;
 }
 
 function tag(node: DebugElement): string {
