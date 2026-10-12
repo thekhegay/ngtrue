@@ -17,11 +17,18 @@ import {
   ControlState,
   DiamondState,
   ExposedState,
+  FocusAfterRender,
+  FocusEscapes,
+  FocusForwarder,
+  FocusFromHost,
+  FocusThrows,
   HalfExposedModel,
   HiddenState,
   HiddenTouch,
+  HoldsFocus,
   ModelFromHost,
   NoDisabled,
+  NoFocus,
   NoModel,
   NoReadonly,
   RelayedState,
@@ -83,6 +90,7 @@ interface BoundField {
   controlValue: { (): unknown; set(value: unknown): void };
   touched: () => boolean;
   markAsTouched: () => void;
+  focusBoundControl: () => void;
 }
 
 function fieldOf(fixture: ComponentFixture<unknown>): BoundField {
@@ -295,6 +303,21 @@ describe('assertSignalFormsControl', () => {
       expect(directive(fixture, CheckedState).checked()).toBe(false);
     });
 
+    it('calls `focus` on the control, and never a `focus()` on one of its host directives', async () => {
+      // What the focus rule's explanation rests on when the control declares
+      // none: it reads `focus` off the directive the template matched and
+      // names a host directive's as never called.
+      const fixture = await rendered(hostFor(FocusFromHost, '<focus-from-host [formField]="form.field" />'));
+      const inner = (fixture.nativeElement as HTMLElement).querySelector('focus-from-host input');
+      fieldOf(fixture).focusBoundControl();
+      expect(document.activeElement).not.toBe(inner);
+
+      // And the forwarder does move focus when called, so the miss above is
+      // Angular not calling it rather than a forwarder that moves nothing.
+      directive(fixture, FocusForwarder).focus();
+      expect(document.activeElement).toBe(inner);
+    });
+
     it('refuses the host when `value` and `valueChange` are not exposed by the same directive', () => {
       expect(() =>
         TestBed.createComponent(hostFor(HalfExposedModel, '<half-exposed-model [formField]="form.field" />')),
@@ -333,6 +356,9 @@ describe('assertSignalFormsControl', () => {
     });
 
     it('passes when the whole control is a host directive, exposed under aliases', async () => {
+      // Its `focus()` is the component's, the only place Angular reads one, and
+      // its host takes no focus, so this also holds the focus rule to the
+      // control Angular registered rather than to the directive the model is on.
       await expect(
         assertSignalFormsControl(create(ModelFromHost, '<model-from-host [formField]="form.field" />')),
       ).resolves.toBeUndefined();
@@ -373,12 +399,23 @@ describe('assertSignalFormsControl', () => {
       ).resolves.toBeUndefined();
     });
 
-    it('marks the field touched, which is the state the last rule leaves behind', async () => {
+    it('marks the field touched, which is the state the touch rule leaves behind', async () => {
       const fixture = TestBed.createComponent(hostFor(GoodText, '<good-text [formField]="form.field" />'));
       await assertSignalFormsControl(fixture);
 
       const host = fixture.componentInstance as { form: { field: () => { touched: () => boolean } } };
       expect(host.form.field().touched()).toBe(true);
+    });
+
+    it('leaves focus on the input inside the control, which is where the focus rule put it', async () => {
+      // A pass on its own could be vacuous: a rule that never asked for focus,
+      // or read the document before focus arrived, would pass too. Focus on the
+      // very element `focus()` forwards to is the trace of a probe that ran.
+      const fixture = TestBed.createComponent(hostFor(GoodText, '<good-text [formField]="form.field" />'));
+      await assertSignalFormsControl(fixture);
+
+      const root = fixture.nativeElement as HTMLElement;
+      expect(document.activeElement).toBe(root.querySelector('good-text input'));
     });
   });
 
@@ -498,6 +535,49 @@ describe('assertSignalFormsControl', () => {
       expect(error.rule).toBe('touch-marks-touched');
       expect(error.message).toContain('emitted `touch`');
     });
+
+    it('focus-reaches-control — a `focus()` declared only on a host directive, which Angular never calls', async () => {
+      const error = await errorFrom(
+        assertSignalFormsControl(create(FocusFromHost, '<focus-from-host [formField]="form.field" />')),
+      );
+
+      expect(error.rule).toBe('focus-reaches-control');
+      expect(error.message).toContain('declares no `focus()`');
+      expect(error.message).toContain('`FocusForwarder`, a host directive of FocusFromHost');
+    });
+
+    it('focus-reaches-control — no `focus()`, and a host that cannot take focus', async () => {
+      const error = await errorFrom(assertSignalFormsControl(create(NoFocus, '<no-focus [formField]="form.field" />')));
+
+      expect(error.rule).toBe('focus-reaches-control');
+      expect(error.message).toContain('declares no `focus()`');
+      expect(error.message).toContain('focus is on <body>');
+    });
+
+    it('focus-reaches-control — a `focus()` that throws', async () => {
+      // The rule id alone cannot tell this apart from the case above: an error
+      // swallowed on the way would fail the same rule, one step later, for a
+      // reason that is not this one. The thrown error has to be in the report.
+      const error = await errorFrom(
+        assertSignalFormsControl(create(FocusThrows, '<focus-throws [formField]="form.field" />')),
+      );
+
+      expect(error.rule).toBe('focus-reaches-control');
+      expect(error.message).toContain('threw');
+      expect(error.message).toContain('NG0951');
+    });
+
+    it('focus-reaches-control — a `focus()` that moves focus out of the control', async () => {
+      // Focus leaves <body> here, so this is the case that holds the rule to
+      // "inside the host" rather than to "somewhere other than where it was".
+      const error = await errorFrom(
+        assertSignalFormsControl(create(FocusEscapes, '<focus-escapes [formField]="form.field" />')),
+      );
+
+      expect(error.rule).toBe('focus-reaches-control');
+      expect(error.message).toContain('focus is on <input>');
+      expect(error.message).toContain('declares `focus` and Angular called it');
+    });
   });
 
   describe('the message', () => {
@@ -608,6 +688,57 @@ describe('assertSignalFormsControl', () => {
 
       expect(error).not.toBeInstanceOf(SignalFormsControlError);
       expect((error as Error).message).toContain('found a `hostDirectives` entry that names no directive');
+    });
+  });
+
+  describe('the focus rule', () => {
+    it('waits for a `focus()` that finishes after the next render', async () => {
+      // The sound twin of FocusThrows. Its input does not exist until edit
+      // mode has rendered, so focus lands a render after the call — and a rule
+      // that read the document without flushing first would fail it.
+      await expect(
+        assertSignalFormsControl(create(FocusAfterRender, '<focus-after-render [formField]="form.field" />')),
+      ).resolves.toBeUndefined();
+    });
+
+    it('moves focus out first, so a control focused before the assertion is still judged', async () => {
+      // Without the blur, focus would start inside and the starting-point check
+      // would refuse a sound control. With it, the probe starts from nowhere
+      // and the control has to bring focus back by itself.
+      const fixture = TestBed.createComponent(hostFor(GoodText, '<good-text [formField]="form.field" />'));
+      await fixture.whenStable();
+      const inner = (fixture.nativeElement as HTMLElement).querySelector('input') as HTMLInputElement;
+      inner.focus();
+      expect(document.activeElement).toBe(inner);
+
+      await expect(assertSignalFormsControl(fixture)).resolves.toBeUndefined();
+    });
+  });
+
+  describe('the focus rule refuses to answer what it cannot see', () => {
+    it('when focus is already inside the control and will not leave', async () => {
+      // HoldsFocus has no `focus()` and no tab stop on its host, so asking the
+      // field to focus it does nothing — and it would PASS, because focus is
+      // already where the rule looks for it. Only the starting-point check
+      // stands between this control and a green run.
+      const error = await errorFrom(
+        assertSignalFormsControl(create(HoldsFocus, '<holds-focus [formField]="form.field" />')),
+      );
+
+      expect(error.rule).toBe('focus-reaches-control');
+      expect(error.message).toContain('already inside HoldsFocus');
+    });
+
+    it('when the fixture is not attached to the document', async () => {
+      // A sound control. Detached, nothing in it can take focus, and the
+      // failure has to say the fixture is why rather than blame the control.
+      const fixture = TestBed.createComponent(hostFor(GoodText, '<good-text [formField]="form.field" />'));
+      (fixture.nativeElement as HTMLElement).remove();
+
+      const error = await errorFrom(assertSignalFormsControl(fixture));
+
+      expect(error.rule).toBe('focus-reaches-control');
+      expect(error.message).toContain('not attached to a document');
     });
   });
 

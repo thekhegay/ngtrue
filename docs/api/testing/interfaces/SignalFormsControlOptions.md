@@ -2,7 +2,7 @@
 
 # Interface: SignalFormsControlOptions
 
-Defined in: [src/testing/signal-forms-control.ts:42](https://github.com/thekhegay/ngtrue/blob/main/src/testing/signal-forms-control.ts#L42)
+Defined in: [src/testing/signal-forms-control.ts:43](https://github.com/thekhegay/ngtrue/blob/main/src/testing/signal-forms-control.ts#L43)
 
 Options for [assertSignalFormsControl](../functions/assertSignalFormsControl.md).
 
@@ -12,7 +12,7 @@ Options for [assertSignalFormsControl](../functions/assertSignalFormsControl.md)
 
 > `readonly` `optional` **selector?**: `string`
 
-Defined in: [src/testing/signal-forms-control.ts:48](https://github.com/thekhegay/ngtrue/blob/main/src/testing/signal-forms-control.ts#L48)
+Defined in: [src/testing/signal-forms-control.ts:49](https://github.com/thekhegay/ngtrue/blob/main/src/testing/signal-forms-control.ts#L49)
 
 CSS selector for the element carrying `[formField]`, when the fixture binds
 more than one. Without it the fixture must hold exactly one bound control —
@@ -24,7 +24,7 @@ guessing between two would make the result depend on template order.
 
 > `readonly` `optional` **values?**: readonly \[`unknown`, `unknown`\]
 
-Defined in: [src/testing/signal-forms-control.ts:63](https://github.com/thekhegay/ngtrue/blob/main/src/testing/signal-forms-control.ts#L63)
+Defined in: [src/testing/signal-forms-control.ts:64](https://github.com/thekhegay/ngtrue/blob/main/src/testing/signal-forms-control.ts#L64)
 
 Two distinct values to drive the round trip with, for a control that does
 not pass its value through untouched.

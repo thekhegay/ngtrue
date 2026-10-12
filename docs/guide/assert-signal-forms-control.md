@@ -8,17 +8,44 @@ the rule that broke.
 ## A runnable example
 
 ```ts
-import { Component, model, input, output, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  input,
+  model,
+  output,
+  provideZonelessChangeDetection,
+  signal,
+  viewChild,
+  type ElementRef,
+} from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { FormField, form, type FormValueControl } from '@angular/forms/signals';
 import { assertSignalFormsControl } from 'ngtrue/testing';
 
-@Component({ selector: 'my-rating', template: '<span>{{ value() }}</span>' })
+@Component({
+  selector: 'my-rating',
+  template: `
+    <input
+      #el
+      type="range"
+      min="0"
+      max="5"
+      [value]="value()"
+      (input)="value.set(el.valueAsNumber)"
+      (blur)="touch.emit()"
+    />
+  `,
+})
 export class MyRating implements FormValueControl<number> {
   readonly value = model(0);
   readonly disabled = input(false);
   readonly readonly = input(false);
   readonly touch = output<void>();
+  private readonly field = viewChild.required<ElementRef<HTMLInputElement>>('el');
+
+  focus(options?: FocusOptions): void {
+    this.field().nativeElement.focus(options);
+  }
 }
 
 @Component({
@@ -55,16 +82,17 @@ very slightly weaker.
 Checked in this order; the first failure is reported, because the later rules
 cannot be evaluated until the earlier ones hold.
 
-| Rule                  | What it means                                                           |
-| --------------------- | ----------------------------------------------------------------------- |
-| `value-model`         | A writable `value` or `checked` model, found by its public binding name |
-| `single-model`        | One of the two, not both                                                |
-| `no-value-accessor`   | No `NG_VALUE_ACCESSOR` on the same element                              |
-| `touch-output`        | An output named exactly `touch`                                         |
-| `disabled-input`      | An input named `disabled`                                               |
-| `readonly-input`      | An input named `readonly`                                               |
-| `value-round-trip`    | The value crosses in both directions                                    |
-| `touch-marks-touched` | Emitting `touch` marks the field touched                                |
+| Rule                    | What it means                                                           |
+| ----------------------- | ----------------------------------------------------------------------- |
+| `value-model`           | A writable `value` or `checked` model, found by its public binding name |
+| `single-model`          | One of the two, not both                                                |
+| `no-value-accessor`     | No `NG_VALUE_ACCESSOR` on the same element                              |
+| `touch-output`          | An output named exactly `touch`                                         |
+| `disabled-input`        | An input named `disabled`                                               |
+| `readonly-input`        | An input named `readonly`                                               |
+| `value-round-trip`      | The value crosses in both directions                                    |
+| `touch-marks-touched`   | Emitting `touch` marks the field touched                                |
+| `focus-reaches-control` | Asking the field to focus the control leaves focus on it or inside it   |
 
 The id is on the thrown error, so a test can assert which rule failed rather
 than matching prose that will get reworded:
@@ -90,6 +118,14 @@ So an omitted `readonly` is not a missing feature somebody will notice — it is
 field that goes on looking editable. A library shipping controls to other people
 does not get to leave that to chance.
 
+`focus()` is optional in the same way. A control without one is focused through
+its host element, and a custom element with no tab stop takes no focus — so
+`focusBoundControl()`, which a form calls to take the user to the first invalid
+field after a failed submit, does nothing and says nothing. The rule does not
+demand the method, because a host that is itself the interactive element is
+focused correctly without one. It demands the outcome: focus on the host or
+inside it. Forwarding is the usual fix, and the example above does it.
+
 There is no option to switch a rule off. A conformance suite you can quiet is a
 conformance suite that tells you what you wanted to hear.
 
@@ -110,7 +146,17 @@ and the rules follow Angular's resolution rather than any one class. This
 control keeps its shared state in a directive and passes:
 
 ```ts
-import { Component, Directive, input, model, output, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  Directive,
+  input,
+  model,
+  output,
+  provideZonelessChangeDetection,
+  signal,
+  viewChild,
+  type ElementRef,
+} from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { FormField, form, type FormValueControl } from '@angular/forms/signals';
 import { assertSignalFormsControl } from 'ngtrue/testing';
@@ -123,12 +169,27 @@ export class ControlState {
 
 @Component({
   selector: 'my-rating',
-  template: '<span>{{ value() }}</span>',
+  template: `
+    <input
+      #el
+      type="range"
+      min="0"
+      max="5"
+      [value]="value()"
+      (input)="value.set(el.valueAsNumber)"
+      (blur)="touch.emit()"
+    />
+  `,
   hostDirectives: [{ directive: ControlState, inputs: ['disabled', 'readonly'] }],
 })
 export class MyRating implements FormValueControl<number> {
   readonly value = model(0);
   readonly touch = output<void>();
+  private readonly field = viewChild.required<ElementRef<HTMLInputElement>>('el');
+
+  focus(options?: FocusOptions): void {
+    this.field().nativeElement.focus(options);
+  }
 }
 
 @Component({
@@ -163,6 +224,10 @@ What counts:
   element directly, so a relay in between does not re-expose.
 - A host directive's unexposed model is invisible to Angular, so it does not
   break `single-model`.
+- `focus()` stays on the control. Angular calls it on the directive the template
+  matched, even when the model comes from beneath, and never on a host
+  directive: an input or an output can be exposed, a method cannot. That is why
+  `focus()` sits on `MyRating` above while its state does not.
 
 Three limits. The round trip and the touch probe go through what Angular
 actually connected, so they catch a wrong reading of the model and of `touch`;
@@ -230,6 +295,21 @@ whole of Angular's mechanism. What is left for a reviewer:
   each announce the outer field's error as their own. That turns on your
   library's own form-field token, which ngtrue cannot know about.
 
+**The focus rule proves focus arrived, not that it arrived somewhere useful.**
+jsdom has no layout, so a target clipped to nothing, moved off-screen,
+zero-sized or `visibility: hidden` still takes focus in a test, and
+`display: none` stops it only where jsdom's own cascade resolves the
+declaration. Nor does the rule look at what took focus: a `focus()` that lands on
+a wrapper with `tabindex="-1"` passes, while a keyboard user can never tab back
+to it and a screen reader announces a nameless group instead of the field.
+Whether focus reaches the element that takes input, and whether anybody can see
+it, is a reviewer's job.
+
+The rule waits for the render after the call and for nothing later. A `focus()`
+deferred with `afterNextRender` passes; one deferred with `setTimeout` is
+reported as a miss, though focus would get there in an application. No timer is
+awaited, so the assertion works under fake timers.
+
 **The round trip proves the binding, not the component.** It shows that the
 model resolved from the definitions is the one Angular connected and that a
 value survives the trip. It says nothing about whether the component writes its
@@ -238,10 +318,12 @@ when you type and forgets when you pick from its own panel passes this and is
 broken. That needs the control's own interactions, and belongs in the control's
 own spec.
 
-**The fixture is spent afterwards.** The value is written twice and the field is
-marked touched, with no attempt to put either back: a restore that silently
-failed would leave a later assertion reading a value this function chose. Bind
-the control to a field the schema leaves interactive, too: Signal Forms reads
-`touched` as false on a hidden, disabled or read-only field, so
-`touch-marks-touched` refuses that fixture rather than blaming the control for
-it.
+**The fixture is spent afterwards.** The value is written twice, the field is
+marked touched and focus is moved into the control, with no attempt to put any
+of it back: a restore that silently failed would leave a later assertion reading
+a value this function chose. Bind the control to a field the schema leaves
+interactive, too: Signal Forms reads `touched` as false on a hidden, disabled or
+read-only field, so `touch-marks-touched` refuses that fixture rather than
+blaming the control for it. And keep the fixture attached to the document, the
+way `TestBed.createComponent` leaves it — nothing detached can take focus, and
+the focus rule says so rather than blaming the control.
