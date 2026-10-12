@@ -138,10 +138,11 @@ extension** — under `nodenext` an extensionless ESM import does not resolve at
 runtime, and `unresolvableTypes` exists to catch exactly that class of mistake
 in someone else's package.
 
-### The one place the Angular compiler does run
+### The two places the Angular compiler does run
 
 `tsconfig.fixtures.json`, over `src/testing/fixtures/controls.ts`, into
-`.fixtures/`.
+`.fixtures/`; and each `src/node/fixtures/declarations-*/tsconfig.json`, in
+partial mode, into that package's own `dist/`.
 
 It has to. Angular's JIT compiler cannot see `input()`, `model()` or `output()`:
 they are initializer APIs, so the inputs and outputs they declare exist only
@@ -167,14 +168,27 @@ and `lint` fail on a clean checkout and in an editor opened before anything has
 been built. Importing the source keeps the fixtures typechecked and linted like
 every other file and confines the generated artefact to `vitest.config.ts`.
 
+**The declaration fixtures are built in PARTIAL mode, on every test run.** They
+are little Angular libraries for `globalAttributeInputs`, which reads the
+`ɵɵngDeclareComponent` calls a published library ships — so they are compiled
+the way a library is, and compiled rather than committed so the check is held to
+what the installed compiler emits. A committed copy would keep passing after
+Angular changed the format under it, the way signal inputs reshaped `inputs` in
+17.1. `ngc` writes the imports it generates without an extension (`"./titled"`
+beside the author's `'./titled.js'`), which Node's ESM loader does not resolve
+and which the check has to follow anyway, because a bundled build never shows
+the difference. Their `dist/` is gitignored, unlike the hand-written packages'.
+
 ## Fixtures are whole packages, not mocks
 
 The node checks read a manifest and a filesystem, so a stub of either would only
 prove the stub matched what the check expected. `src/node/fixtures/` holds real
 little packages — one correct, one wrong in a distinct way per finding, one with
-no `exports`, one with no `name`. Each fault is one a real build produces: a
-file the build stopped emitting, a subpath with no `types` condition, a pattern
-matching nothing, an import nobody declared, a peer nobody imports.
+no `exports`, one with no `name`, and a sound and a broken Angular library built
+from source on every run. Each fault is one a real build produces: a file the
+build stopped emitting, a subpath with no `types` condition, a pattern matching
+nothing, an import nobody declared, a peer nobody imports, a `title` input whose
+host carries the attribute.
 
 They are excluded from `tsconfig.json`, `tsconfig.build.json`, eslint and the
 vitest run, each for its own reason and each with the reason written at the

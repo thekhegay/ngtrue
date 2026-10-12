@@ -70,6 +70,7 @@ evaporate in silence.
 
 ```ts
 import {
+  globalAttributeInputs,
   peerDependencyMismatches,
   unexportedTypes,
   unloadableSchematics,
@@ -95,6 +96,10 @@ it('declares what it imports, and imports what it declares', () => {
 
 it('ships schematics the CLI can load', async () => {
   expect(await unloadableSchematics({ packageDir: 'dist' })).toEqual([]);
+});
+
+it('keeps a static title off the host', async () => {
+  expect(await globalAttributeInputs({ packageDir: 'dist' })).toEqual([]);
 });
 ```
 

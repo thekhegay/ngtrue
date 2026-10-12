@@ -160,9 +160,9 @@ That holds when `ignore` acknowledged every one of those subpaths, too —
 acknowledging a subpath excuses the line about it, and does not turn
 "nothing was read" into "nothing was wrong".
 
-`typescript` has to be installed. It is an optional peer of ngtrue, and this
-and `unresolvableTypes` are the two functions that load it; without it this
-throws rather than passing.
+`typescript` has to be installed. It is an optional peer of ngtrue, and this,
+`unresolvableTypes` and `globalAttributeInputs` are the three functions that
+load it; without it this throws rather than passing.
 
 ## Parameters
 

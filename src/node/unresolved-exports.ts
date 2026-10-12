@@ -1,7 +1,7 @@
-import { existsSync, readdirSync, statSync } from 'node:fs';
-import { join, posix, resolve, sep } from 'node:path';
+import { existsSync, statSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
-import { exportTargets, readManifest, type ExportTarget } from './manifest.js';
+import { exportTargets, filesMatching, readManifest, type ExportTarget } from './manifest.js';
 
 /** Options for {@link unresolvedExports}. */
 /** @since 0.1.0 */
@@ -87,7 +87,7 @@ export function unresolvedExports(options: UnresolvedExportsOptions): readonly s
         problems.push(`${where(target)} contains ${String(stars)} "*"; Node expands only the first.`);
         continue;
       }
-      if (matchCount(packageDir, target.target) === 0) {
+      if (filesMatching(packageDir, target.target).length === 0) {
         problems.push(`${where(target)} matches no file under ${options.packageDir}.`);
       }
       continue;
@@ -107,38 +107,4 @@ function where(target: ExportTarget): string {
   const conditions =
     target.conditions.length === 0 ? '' : ` (condition ${target.conditions.map(c => `"${c}"`).join(' → ')})`;
   return `exports["${target.subpath}"]${conditions}`;
-}
-
-/**
- * How many files a single-`*` target expands to.
- *
- * Walks the fixed prefix directory rather than globbing, so there is no pattern
- * dialect to get wrong: Node's own rule is that `*` stands for any substring,
- * including slashes.
- */
-function matchCount(packageDir: string, target: string): number {
-  const relative = target.slice(2);
-  const star = relative.indexOf('*');
-  const prefix = relative.slice(0, star);
-  const suffix = relative.slice(star + 1);
-  const root = join(packageDir, prefix.slice(0, prefix.lastIndexOf('/') + 1));
-  if (!existsSync(root)) return 0;
-
-  const head = prefix.slice(prefix.lastIndexOf('/') + 1);
-  let count = 0;
-  const walk = (dir: string): void => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const full = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        walk(full);
-        continue;
-      }
-      const fromRoot = full.slice(root.length).split(sep).join(posix.sep);
-      if (fromRoot.startsWith(head) && fromRoot.endsWith(suffix) && fromRoot.length >= head.length + suffix.length) {
-        count += 1;
-      }
-    }
-  };
-  walk(root);
-  return count;
 }

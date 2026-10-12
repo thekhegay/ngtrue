@@ -1,0 +1,27 @@
+{
+  // A library build, in miniature: `ngc` in partial mode, which is what every
+  // published Angular library ships and the form `globalAttributeInputs` reads.
+  // Compiled by `npm run fixtures` on every test run rather than committed, so
+  // the check is held to what the installed compiler emits today — a committed
+  // copy would keep passing after Angular changed the format underneath it, the
+  // way signal inputs changed the shape of `inputs` in 17.1.
+  "extends": "../../../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    // The second entry point imports the first by the package's own name, the
+    // way a FESM entry point imports a sibling. The emitted JavaScript keeps the
+    // bare specifier, so the check has to resolve it through `exports`.
+    "paths": { "fixture-declarations-sound/core": ["./src/core/index.ts"] }
+  },
+  "include": ["src/**/*.ts"],
+  // The root config excludes every fixture, and `exclude` is inherited.
+  "exclude": [],
+  "angularCompilerOptions": {
+    "compilationMode": "partial",
+    "strictTemplates": true
+  }
+}

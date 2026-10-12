@@ -1,0 +1,21 @@
+{
+  // Built exactly like `../declarations-sound`; see the note there.
+  "extends": "../../../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    // A scoped name this time, so the check's self-reference has to keep the
+    // scope when it maps a specifier onto `exports`.
+    "paths": { "@fixture/declarations-broken/core": ["./src/core/index.ts"] }
+  },
+  "include": ["src/**/*.ts"],
+  // The root config excludes every fixture, and `exclude` is inherited.
+  "exclude": [],
+  "angularCompilerOptions": {
+    "compilationMode": "partial",
+    "strictTemplates": true
+  }
+}

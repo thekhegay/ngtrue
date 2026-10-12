@@ -13,3 +13,6 @@ docs/.vitepress/cache/
 
 # Emitted by `npm run fixtures` (ngc). Compiled test fixtures, never shipped.
 .fixtures/
+# The partial-mode builds of the declaration fixtures, compiled on every test
+# run so the check reads what the installed compiler emits rather than a copy.
+src/node/fixtures/declarations-*/dist/
