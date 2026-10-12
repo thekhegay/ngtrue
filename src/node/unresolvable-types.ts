@@ -1,8 +1,9 @@
-import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { resolve } from 'node:path';
+
+import type { CompilerOptions } from 'typescript';
 
 import { exportTargets, readManifest } from './manifest.js';
+import { loadTypeScript, stageProbe, type TypeScript } from './probe.js';
 
 /** A module-resolution mode a consumer's `tsconfig.json` can be in. */
 /** @since 0.1.0 */
@@ -99,14 +100,17 @@ export interface UnresolvableTypesOptions {
  * the reason a wildcard is not probed either.
  *
  * **`typescript` has to be installed.** It is an optional peer dependency of
- * ngtrue, and this is the only function that needs it. Any repository shipping
- * a typed package has it already; one that somehow does not gets an error
- * saying so rather than a pass.
+ * ngtrue, needed by this function and by `unexportedTypes` and by nothing else.
+ * Any repository shipping a typed package has it already; one that somehow
+ * does not gets an error saying so rather than a pass.
  *
  * @since 0.1.0
  */
 export async function unresolvableTypes(options: UnresolvableTypesOptions): Promise<readonly string[]> {
-  const ts = await loadTypeScript();
+  const ts = await loadTypeScript(
+    'unresolvableTypes',
+    'It runs the real compiler resolver rather than an approximation of it, which is the whole reason to trust its answer.',
+  );
   const packageDir = resolve(options.packageDir);
   const manifest = readManifest(packageDir);
   const modes = options.modes ?? (['node16', 'bundler'] as const);
@@ -181,36 +185,7 @@ export async function unresolvableTypes(options: UnresolvableTypesOptions): Prom
  */
 const STYLESHEET_CONDITIONS = new Set(['sass', 'style']);
 
-interface TypeScriptApi {
-  readonly sys: unknown;
-  readonly ModuleKind: Record<string, number>;
-  readonly ModuleResolutionKind: Record<string, number>;
-  readonly ScriptTarget: Record<string, number>;
-  resolveModuleName(
-    name: string,
-    containingFile: string,
-    options: object,
-    host: unknown,
-  ): { resolvedModule?: { resolvedFileName: string } };
-}
-
-async function loadTypeScript(): Promise<TypeScriptApi> {
-  try {
-    const loaded = (await import('typescript')) as { default?: unknown };
-    // TypeScript is CommonJS, so it arrives under `default` from ESM and as the
-    // namespace itself from a CJS-interop build. Both spellings are live in the
-    // wild depending on how the caller's runner loads it.
-    return (loaded.default ?? loaded) as TypeScriptApi satisfies TypeScriptApi;
-  } catch {
-    throw new Error(
-      'ngtrue: `unresolvableTypes` needs the `typescript` package, which is an optional peer ' +
-        'dependency and is not installed here. It runs the real compiler resolver rather than ' +
-        'an approximation of it, which is the whole reason to trust its answer.',
-    );
-  }
-}
-
-function optionsFor(ts: TypeScriptApi, mode: ResolutionMode): object {
+function optionsFor(ts: TypeScript, mode: ResolutionMode): CompilerOptions {
   // `allowJs` so the resolver distinguishes "there is nothing here" from "there
   // is JavaScript here and no declarations beside it". Those are different bugs
   // with different fixes, and neither is a pass — a consumer without `allowJs`
@@ -218,32 +193,8 @@ function optionsFor(ts: TypeScriptApi, mode: ResolutionMode): object {
   // `any` and no complaint at all, which is the worse outcome of the two. A
   // package that does ship declarations resolves to them either way, so turning
   // this on cannot report a correct package as broken.
-  const shared = { target: ts.ScriptTarget['ES2022'], strict: true, allowJs: true };
+  const shared = { target: ts.ScriptTarget.ES2022, strict: true, allowJs: true };
   return mode === 'node16'
-    ? { ...shared, module: ts.ModuleKind['Node16'], moduleResolution: ts.ModuleResolutionKind['Node16'] }
-    : { ...shared, module: ts.ModuleKind['ESNext'], moduleResolution: ts.ModuleResolutionKind['Bundler'] };
-}
-
-/**
- * A throwaway package with the subject symlinked into its `node_modules`.
- *
- * `"type": "module"` on the probe because the probing file is ESM, which is what
- * decides between the `import` and `require` conditions under node16 — a probe
- * that left it out would silently ask the `require` question of a package that
- * only answers the `import` one.
- */
-function stageProbe(name: string, packageDir: string): { containingFile: string; dispose: () => void } {
-  const root = mkdtempSync(join(tmpdir(), 'ngtrue-types-'));
-  writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'ngtrue-types-probe', type: 'module' }));
-
-  const scoped = name.startsWith('@');
-  const modules = join(root, 'node_modules');
-  mkdirSync(scoped ? join(modules, name.split('/')[0] as string) : modules, { recursive: true });
-  // `junction` is ignored everywhere but Windows, where a plain directory
-  // symlink needs a privilege CI does not hand out.
-  symlinkSync(packageDir, join(modules, name), 'junction');
-
-  const containingFile = join(root, 'probe.ts');
-  writeFileSync(containingFile, 'export {};\n');
-  return { containingFile, dispose: () => rmSync(root, { recursive: true, force: true }) };
+    ? { ...shared, module: ts.ModuleKind.Node16, moduleResolution: ts.ModuleResolutionKind.Node16 }
+    : { ...shared, module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler };
 }

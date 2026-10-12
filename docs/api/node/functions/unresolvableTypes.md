@@ -4,7 +4,7 @@
 
 > **unresolvableTypes**(`options`): `Promise`\<readonly `string`[]\>
 
-Defined in: [src/node/unresolvable-types.ts:108](https://github.com/thekhegay/ngtrue/blob/main/src/node/unresolvable-types.ts#L108)
+Defined in: [src/node/unresolvable-types.ts:109](https://github.com/thekhegay/ngtrue/blob/main/src/node/unresolvable-types.ts#L109)
 
 Every subpath whose TYPES do not resolve, under each mode, as one sentence
 each. An empty array is a pass.
@@ -84,9 +84,9 @@ in it is importable, so the root alone would be one sample of an open set —
 the reason a wildcard is not probed either.
 
 **`typescript` has to be installed.** It is an optional peer dependency of
-ngtrue, and this is the only function that needs it. Any repository shipping
-a typed package has it already; one that somehow does not gets an error
-saying so rather than a pass.
+ngtrue, needed by this function and by `unexportedTypes` and by nothing else.
+Any repository shipping a typed package has it already; one that somehow
+does not gets an error saying so rather than a pass.
 
 ## Parameters
 

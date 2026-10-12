@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { peerDependencyMismatches } from './peer-dependency-mismatches.js';
+import { unexportedTypes } from './unexported-types.js';
 import { unresolvableTypes } from './unresolvable-types.js';
 import { unresolvedExports } from './unresolved-exports.js';
 
@@ -13,8 +14,8 @@ import { unresolvedExports } from './unresolved-exports.js';
  * Fixtures prove the checks report what they claim to; this proves they are
  * usable on a real package, which is a different question and the one that has
  * historically gone unasked. It is also the cheapest possible guard on the
- * package's own manifest: the three faults these functions exist to catch are
- * exactly the three a release of ngtrue could ship.
+ * package's own manifest: the faults these functions exist to catch are
+ * exactly the ones a release of ngtrue could ship.
  */
 const ROOT = join(import.meta.dirname, '../..');
 
@@ -24,7 +25,7 @@ describe('ngtrue, checked by ngtrue', () => {
     // quietly passed when there was nothing to look at would be green on every
     // run that mattered.
     if (!existsSync(join(ROOT, 'dist'))) {
-      throw new Error('ngtrue: run `npm run build` before the tests — these three checks read `dist/`.');
+      throw new Error('ngtrue: run `npm run build` before the tests — these checks read `dist/`.');
     }
   });
 
@@ -34,6 +35,10 @@ describe('ngtrue, checked by ngtrue', () => {
 
   it('resolves its types under node16 and under bundler', async () => {
     expect(await unresolvableTypes({ packageDir: ROOT })).toEqual([]);
+  });
+
+  it('exports every type its public signatures name', async () => {
+    expect(await unexportedTypes({ packageDir: ROOT })).toEqual([]);
   });
 
   it('declares what it imports, and imports what it declares', () => {

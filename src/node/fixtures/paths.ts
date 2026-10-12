@@ -23,4 +23,12 @@ export const FIXTURES = {
   schematicsSelfReference: `${here}/schematics-self-reference`,
   schematicsWorkspaceRoot: `${here}/schematics-workspace-root`,
   schematicsBadName: `${here}/schematics-bad-name`,
+  unexportedSound: `${here}/unexported-sound`,
+  unexportedBroken: `${here}/unexported-broken`,
+  unexportedSibling: `${here}/unexported-sibling`,
+  unexportedPrivate: `${here}/unexported-private`,
+  unexportedEmpty: `${here}/unexported-empty`,
+  unexportedDangling: `${here}/unexported-dangling`,
+  unexportedWildcard: `${here}/unexported-wildcard`,
+  unexportedStale: `${here}/unexported-stale`,
 } as const;
