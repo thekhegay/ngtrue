@@ -1,19 +1,39 @@
 import { Component, provideZonelessChangeDetection, signal, type Type } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
-import { FormField, form } from '@angular/forms/signals';
+import { FormField, disabled, form, hidden, readonly, type SchemaPath } from '@angular/forms/signals';
+import { By } from '@angular/platform-browser';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
   GoodAttribute,
   GoodText,
   GoodToggle,
+  AliasedExposure,
   AliasedModel,
+  AliasedState,
   BothModels,
+  CheckedState,
   CoercesValue,
+  ControlState,
+  DiamondState,
+  ExposedState,
+  HalfExposedModel,
+  HiddenState,
+  HiddenTouch,
+  ModelFromHost,
   NoDisabled,
   NoModel,
   NoReadonly,
+  RelayedState,
+  ScoreState,
+  ShadowedModel,
+  TouchFromHost,
+  TouchSource,
   UnwritableModel,
+  UsesShared,
+  ValueAndExposedChecked,
+  WholeControl,
+  WidensShared,
   WithAccessor,
   WrongTouchName,
 } from './fixtures/controls.js';
@@ -34,8 +54,13 @@ import {
  */
 
 /** A host binding one control, built per fixture class so each test gets a fresh field. */
-function hostFor(control: Type<unknown>, template: string, initial: unknown = ''): Type<unknown> {
-  @Component({ template, imports: [control, FormField] })
+function hostFor(
+  control: Type<unknown>,
+  template: string,
+  initial: unknown = '',
+  extra: readonly Type<unknown>[] = [],
+): Type<unknown> {
+  @Component({ template, imports: [control, ...extra, FormField] })
   class Host {
     readonly model = signal({ field: initial });
     readonly form = form(this.model);
@@ -44,8 +69,77 @@ function hostFor(control: Type<unknown>, template: string, initial: unknown = ''
 }
 
 /** The factory form, which is how the assertion is meant to be called. */
-function create(control: Type<unknown>, template: string, initial: unknown = ''): () => ComponentFixture<unknown> {
-  return () => TestBed.createComponent(hostFor(control, template, initial));
+function create(
+  control: Type<unknown>,
+  template: string,
+  initial: unknown = '',
+  extra: readonly Type<unknown>[] = [],
+): () => ComponentFixture<unknown> {
+  return () => TestBed.createComponent(hostFor(control, template, initial, extra));
+}
+
+/** The field a {@link hostFor} host binds, for the tests that read or write it directly. */
+interface BoundField {
+  controlValue: { (): unknown; set(value: unknown): void };
+  touched: () => boolean;
+  markAsTouched: () => void;
+}
+
+function fieldOf(fixture: ComponentFixture<unknown>): BoundField {
+  return (fixture.componentInstance as { form: { field: () => BoundField } }).form.field();
+}
+
+/** A schema rule for the one field a {@link stateHost} binds. */
+type FieldRule = (field: SchemaPath<string>) => void;
+
+const DISABLED_AND_READONLY: FieldRule = field => {
+  disabled(field);
+  readonly(field);
+};
+
+/**
+ * A host whose schema turns `disabled` and `readonly` ON, so what Angular
+ * delivers can be read back off the directive that declares the input. The
+ * assertion itself cannot do this — it is handed someone else's schema — which
+ * is exactly why these tests exist: they pin the reading of Angular the
+ * assertion's definition rules rest on, against the Angular installed.
+ */
+function stateHost(
+  control: Type<unknown>,
+  template: string,
+  extra: readonly Type<unknown>[] = [],
+  rule: FieldRule = DISABLED_AND_READONLY,
+): Type<unknown> {
+  @Component({ template, imports: [control, ...extra, FormField] })
+  class Host {
+    readonly model = signal({ field: '' });
+    readonly form = form(this.model, path => {
+      rule(path.field);
+    });
+  }
+  return Host;
+}
+
+async function rendered(host: Type<unknown>): Promise<ComponentFixture<unknown>> {
+  const fixture = TestBed.createComponent(host);
+  fixture.detectChanges();
+  await fixture.whenStable();
+  return fixture;
+}
+
+function directive<T>(fixture: ComponentFixture<unknown>, type: Type<T>): T {
+  const node = fixture.debugElement.query(By.directive(type));
+  if (node === null) throw new Error(`${type.name} is not on any element in this fixture.`);
+  return node.injector.get(type);
+}
+
+/** What reached `disabled` and `readonly` on the directive that declares them. */
+function deliveredState(
+  fixture: ComponentFixture<unknown>,
+  holder: Type<{ disabled: () => boolean; readonly: () => boolean }>,
+): readonly [boolean, boolean] {
+  const instance = directive(fixture, holder);
+  return [instance.disabled(), instance.readonly()];
 }
 
 /**
@@ -85,6 +179,129 @@ describe('assertSignalFormsControl', () => {
     TestBed.configureTestingModule({ providers: [provideZonelessChangeDetection()] });
   });
 
+  describe("Angular's own resolution, which the definition rules mirror", () => {
+    // Every claim the host-directive walk makes about what Angular binds, held
+    // against what the installed Angular actually binds. Should a minor release
+    // move the resolution, these fail first and say where.
+
+    it('writes an input a host directive exposes', async () => {
+      const fixture = await rendered(stateHost(ExposedState, '<exposed-state [formField]="form.field" />'));
+      expect(deliveredState(fixture, ControlState)).toEqual([true, true]);
+    });
+
+    it("writes a nested host directive's exposure, through the function form and a bare type", async () => {
+      const fixture = await rendered(stateHost(RelayedState, '<relayed-state [formField]="form.field" />'));
+      expect(deliveredState(fixture, ControlState)).toEqual([true, true]);
+    });
+
+    it('merges two entries for one host directive, and writes what either exposes', async () => {
+      const fixture = await rendered(stateHost(DiamondState, '<diamond-state [formField]="form.field" />'));
+      expect(deliveredState(fixture, ControlState)).toEqual([true, true]);
+    });
+
+    it('writes a merged exposure back into a shared definition, and every control on it follows', async () => {
+      // One test rather than three, because the order is the subject: what
+      // happens to UsesShared depends on whether WidensShared has rendered yet,
+      // and Angular's change to the shared definition lasts for the rest of the
+      // file. The JSDoc names this as the limit no driven rule can catch, and
+      // this is what keeps that sentence true — when Angular stops writing into
+      // a shared entry, the second half fails and the paragraph has to go.
+      const control = '<uses-shared [formField]="form.field" />';
+      expect(deliveredState(await rendered(stateHost(UsesShared, control)), ControlState)).toEqual([false, true]);
+      expect(await ruleBrokenBy(create(UsesShared, control))).toBe('disabled-input');
+
+      await rendered(hostFor(WidensShared, '<widens-shared />'));
+
+      expect(deliveredState(await rendered(stateHost(UsesShared, control)), ControlState)).toEqual([true, true]);
+      expect(await ruleBrokenBy(create(UsesShared, control))).toBeNull();
+    });
+
+    it('does not write an input a host directive declares and leaves unexposed', async () => {
+      const fixture = await rendered(stateHost(HiddenState, '<hidden-state [formField]="form.field" />'));
+      expect(deliveredState(fixture, WholeControl)).toEqual([false, false]);
+    });
+
+    it('binds the model a host directive exposes, under the alias it is exposed as', async () => {
+      const fixture = await rendered(hostFor(ModelFromHost, '<model-from-host [formField]="form.field" />'));
+      fieldOf(fixture).controlValue.set('in');
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(directive(fixture, ScoreState).score()).toBe('in');
+
+      directive(fixture, ScoreState).score.set('out');
+      expect(fieldOf(fixture).controlValue()).toBe('out');
+    });
+
+    it("binds the component's own model and never an unexposed one beside it", async () => {
+      const fixture = await rendered(hostFor(ShadowedModel, '<shadowed-model [formField]="form.field" />'));
+      fieldOf(fixture).controlValue.set('in');
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(directive(fixture, ShadowedModel).value()).toBe('in');
+      expect(directive(fixture, WholeControl).value()).toBe('');
+    });
+
+    it('does not subscribe to a `touch` a host directive leaves unexposed', async () => {
+      const fixture = await rendered(hostFor(HiddenTouch, '<hidden-touch [formField]="form.field" />'));
+      directive(fixture, WholeControl).touch.emit();
+      expect(fieldOf(fixture).touched()).toBe(false);
+
+      // And the field itself can be touched, so the false above is about the
+      // subscription rather than a field that ignores every touch.
+      fieldOf(fixture).markAsTouched();
+      expect(fieldOf(fixture).touched()).toBe(true);
+    });
+
+    it('drops an exposure when the template applies the same directive by hand', async () => {
+      const composed = await rendered(hostFor(TouchFromHost, '<touch-from-host [formField]="form.field" />'));
+      directive(composed, TouchSource).touch.emit();
+      expect(fieldOf(composed).touched()).toBe(true);
+
+      const byHand = await rendered(
+        hostFor(TouchFromHost, '<touch-from-host touchSource [formField]="form.field" />', '', [TouchSource]),
+      );
+      directive(byHand, TouchSource).touch.emit();
+      expect(fieldOf(byHand).touched()).toBe(false);
+    });
+
+    it('drops an ALIASED input exposure the same way, and the assertion cannot tell', async () => {
+      // The limit the JSDoc names for `disabled` and `readonly`. The
+      // definitions read the same with the attribute and without it, no driven
+      // rule reaches either input, and so the assertion passes a fixture in
+      // which Angular writes neither. When Angular stops dropping the aliased
+      // exposure, the middle line fails and the paragraph has to go.
+      const delivered = (fixture: ComponentFixture<unknown>): readonly [boolean, boolean] => {
+        const state = directive(fixture, AliasedState);
+        return [state.isDisabled(), state.isReadonly()];
+      };
+      const composed = '<aliased-exposure [formField]="form.field" />';
+      const byHand = '<aliased-exposure aliasedState [formField]="form.field" />';
+
+      expect(delivered(await rendered(stateHost(AliasedExposure, composed)))).toEqual([true, true]);
+      expect(delivered(await rendered(stateHost(AliasedExposure, byHand, [AliasedState])))).toEqual([false, false]);
+      expect(await ruleBrokenBy(create(AliasedExposure, byHand, '', [AliasedState]))).toBeNull();
+    });
+
+    it("binds the component's own `value` before a `checked` pair a host directive exposes", async () => {
+      // What makes the exposed pair dead, and the `single-model` failure below
+      // a real one rather than a preference.
+      const fixture = await rendered(
+        hostFor(ValueAndExposedChecked, '<value-and-exposed-checked [formField]="form.field" />'),
+      );
+      fieldOf(fixture).controlValue.set('in');
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(directive(fixture, ValueAndExposedChecked).value()).toBe('in');
+      expect(directive(fixture, CheckedState).checked()).toBe(false);
+    });
+
+    it('refuses the host when `value` and `valueChange` are not exposed by the same directive', () => {
+      expect(() =>
+        TestBed.createComponent(hostFor(HalfExposedModel, '<half-exposed-model [formField]="form.field" />')),
+      ).toThrow(/NG01914/);
+    });
+  });
+
   describe('a conforming control', () => {
     it('passes for a `value` model', async () => {
       await expect(
@@ -104,6 +321,55 @@ describe('assertSignalFormsControl', () => {
       // nothing wrong with a control it never looked at.
       await expect(
         assertSignalFormsControl(create(GoodAttribute, '<div goodAttribute [formField]="form.field"></div>')),
+      ).resolves.toBeUndefined();
+    });
+
+    it('passes when `disabled` and `readonly` arrive through a host directive that exposes them', async () => {
+      // The case the definition read used to get backwards: the inputs are not
+      // on the component's own definition, and Angular writes them anyway.
+      await expect(
+        assertSignalFormsControl(create(ExposedState, '<exposed-state [formField]="form.field" />')),
+      ).resolves.toBeUndefined();
+    });
+
+    it('passes when the whole control is a host directive, exposed under aliases', async () => {
+      await expect(
+        assertSignalFormsControl(create(ModelFromHost, '<model-from-host [formField]="form.field" />')),
+      ).resolves.toBeUndefined();
+    });
+
+    it('passes for a component whose host directive carries an unexposed model of its own', async () => {
+      // Angular binds the component's model and never sees the directive's, so
+      // counting the two as rivals would fail a control Angular binds cleanly.
+      await expect(
+        assertSignalFormsControl(create(ShadowedModel, '<shadowed-model [formField]="form.field" />')),
+      ).resolves.toBeUndefined();
+    });
+
+    it('passes when the state is exposed two host directives down, through the function form', async () => {
+      await expect(
+        assertSignalFormsControl(create(RelayedState, '<relayed-state [formField]="form.field" />')),
+      ).resolves.toBeUndefined();
+    });
+
+    it('passes when one host directive is reached twice, each path exposing half', async () => {
+      await expect(
+        assertSignalFormsControl(create(DiamondState, '<diamond-state [formField]="form.field" />')),
+      ).resolves.toBeUndefined();
+    });
+
+    it('passes when `disabled` and `readonly` are exposed under an alias, through the function form', async () => {
+      // The function form carries its exposure as a flat `[own, exposed]` list,
+      // so a reader that took each name for itself would look for `isDisabled`
+      // on the element and fail a control Angular writes both inputs to.
+      await expect(
+        assertSignalFormsControl(create(AliasedExposure, '<aliased-exposure [formField]="form.field" />')),
+      ).resolves.toBeUndefined();
+    });
+
+    it('passes when `touch` comes from a host directive', async () => {
+      await expect(
+        assertSignalFormsControl(create(TouchFromHost, '<touch-from-host [formField]="form.field" />')),
       ).resolves.toBeUndefined();
     });
 
@@ -133,8 +399,33 @@ describe('assertSignalFormsControl', () => {
       );
     });
 
+    it('value-model — a host directive exposes `value` and not `valueChange`', async () => {
+      expect(await ruleBrokenBy(create(HalfExposedModel, '<half-exposed-model [formField]="form.field" />'))).toBe(
+        'value-model',
+      );
+    });
+
     it('single-model — both `value` and `checked`, one of them dead', async () => {
       expect(await ruleBrokenBy(create(BothModels, '<both-models [formField]="form.field" />'))).toBe('single-model');
+    });
+
+    it('single-model — its own `value`, and a `checked` pair a host directive exposes', async () => {
+      const error = await errorFrom(
+        assertSignalFormsControl(
+          create(ValueAndExposedChecked, '<value-and-exposed-checked [formField]="form.field" />'),
+        ),
+      );
+
+      expect(error.rule).toBe('single-model');
+      expect(error.message).toContain('counting what `CheckedState` exposes');
+    });
+
+    it('single-model — two directives on one element, each with a model', async () => {
+      expect(
+        await ruleBrokenBy(
+          create(GoodText, '<good-text goodAttribute [formField]="form.field" />', '', [GoodAttribute]),
+        ),
+      ).toBe('single-model');
     });
 
     it('no-value-accessor — a leftover accessor silently outranks the model', async () => {
@@ -157,10 +448,55 @@ describe('assertSignalFormsControl', () => {
       expect(await ruleBrokenBy(create(NoReadonly, '<no-readonly [formField]="form.field" />'))).toBe('readonly-input');
     });
 
-    it('value-round-trip — the value does not survive the trip', async () => {
-      expect(await ruleBrokenBy(create(CoercesValue, '<coerces-value [formField]="form.field" />'))).toBe(
-        'value-round-trip',
+    it('disabled-input — declared on a host directive and never exposed', async () => {
+      // The other half of the same mistake: the class has every input, so a
+      // check reading the directive that DECLARES them passes a control Angular
+      // writes neither of them to.
+      expect(await ruleBrokenBy(create(HiddenState, '<hidden-state [formField]="form.field" />'))).toBe(
+        'disabled-input',
       );
+    });
+
+    it('touch-output — declared on a host directive and never exposed', async () => {
+      expect(await ruleBrokenBy(create(HiddenTouch, '<hidden-touch [formField]="form.field" />'))).toBe('touch-output');
+    });
+
+    it('value-round-trip — the value does not survive the trip in', async () => {
+      const error = await errorFrom(
+        assertSignalFormsControl(create(CoercesValue, '<coerces-value [formField]="form.field" />')),
+      );
+
+      expect(error.rule).toBe('value-round-trip');
+      expect(error.message).toContain('The field wrote');
+    });
+
+    it('value-round-trip — the value does not survive the trip out', async () => {
+      // A string in, which it keeps; an object out, which it turns into a
+      // string after the field has already taken the object. Same rule, the
+      // other half of it, so the message is what tells the two apart.
+      const error = await errorFrom(
+        assertSignalFormsControl(create(CoercesValue, '<coerces-value [formField]="form.field" />'), {
+          values: ['first', { not: 'a string' }],
+        }),
+      );
+
+      expect(error.rule).toBe('value-round-trip');
+      expect(error.message).toContain('CoercesValue set `value` to {"not":"a string"}');
+    });
+
+    it('touch-marks-touched — the template applies the host directive by hand, and Angular drops its exposure', async () => {
+      // Nothing in any definition says so: the control declares the exposure,
+      // and Angular discards it because the template matched the directive
+      // itself. The definition rules pass this; only emitting `touch` and
+      // watching the field catches it.
+      const error = await errorFrom(
+        assertSignalFormsControl(
+          create(TouchFromHost, '<touch-from-host touchSource [formField]="form.field" />', '', [TouchSource]),
+        ),
+      );
+
+      expect(error.rule).toBe('touch-marks-touched');
+      expect(error.message).toContain('emitted `touch`');
     });
   });
 
@@ -184,11 +520,94 @@ describe('assertSignalFormsControl', () => {
       expect(error.message).not.toContain('Inputs seen: none');
     });
 
+    it('names the host directive that declares an input it never exposed', async () => {
+      const error = await errorFrom(
+        assertSignalFormsControl(create(HiddenState, '<hidden-state [formField]="form.field" />')),
+      );
+
+      expect(error.message).toContain('<hidden-state> (HiddenState)');
+      expect(error.message).toContain('WholeControl');
+      expect(error.message).toContain('not exposed');
+    });
+
     it('quotes Angular when Angular is the one that refused the host', async () => {
       const error = await errorFrom(assertSignalFormsControl(create(NoModel, '<no-model [formField]="form.field" />')));
 
       expect(error.rule).toBe('value-model');
       expect(error.message).toContain('NG01914');
+    });
+  });
+
+  describe('a fixture that cannot answer the touch rule', () => {
+    it('is refused when the field is already touched', async () => {
+      const fixture = TestBed.createComponent(hostFor(GoodText, '<good-text [formField]="form.field" />'));
+      fieldOf(fixture).markAsTouched();
+
+      const error = await errorFrom(assertSignalFormsControl(fixture));
+      expect(error.rule).toBe('touch-marks-touched');
+      expect(error.message).toContain('already touched');
+    });
+
+    // Signal Forms reads `touched` as false on a hidden, disabled or read-only
+    // field, whatever the control emits. Reporting that as a control that is
+    // not wired would blame the control for the fixture's schema. One state at
+    // a time, because each is its own way in and a refusal that knew only two
+    // of them would blame the control for the third.
+    it.each<readonly [string, FieldRule]>([
+      ['hidden', field => hidden(field)],
+      ['disabled', field => disabled(field)],
+      ['readonly', field => readonly(field)],
+    ])('is refused when the field is %s, where touching does nothing', async (state, rule) => {
+      const error = await errorFrom(
+        assertSignalFormsControl(() =>
+          TestBed.createComponent(stateHost(GoodText, '<good-text [formField]="form.field" />', [], rule)),
+        ),
+      );
+      expect(error.rule).toBe('touch-marks-touched');
+      expect(error.message).toContain(`The bound field is ${state}, so it cannot be touched`);
+    });
+  });
+
+  describe('a composition it cannot read', () => {
+    // Angular's private layout moving under the walk, simulated on a fixture
+    // that has already rendered: Angular resolved the real definition, so only
+    // the assertion sees the change. Each case uses HiddenState because there
+    // the wrong reading is a PASS — with no host directives read, WholeControl
+    // counts as a directive the template matched, carries every member itself,
+    // and becomes the control. Refusing is the only answer that is not a lie.
+    class NotADirective {}
+
+    async function failureAfter(patch: (definition: Record<string, unknown>) => void): Promise<unknown> {
+      const fixture = await rendered(hostFor(HiddenState, '<hidden-state [formField]="form.field" />'));
+      const definition = (HiddenState as unknown as { ɵcmp: Record<string, unknown> }).ɵcmp;
+      const original = definition['hostDirectives'];
+      try {
+        patch(definition);
+        return await assertSignalFormsControl(fixture).then(
+          () => new Error('expected assertSignalFormsControl to refuse, and it passed.'),
+          (error: unknown) => error,
+        );
+      } finally {
+        definition['hostDirectives'] = original;
+      }
+    }
+
+    it('refuses a definition that has no `hostDirectives` field at all', async () => {
+      const error = await failureAfter(definition => {
+        delete definition['hostDirectives'];
+      });
+
+      expect(error).not.toBeInstanceOf(SignalFormsControlError);
+      expect((error as Error).message).toContain('found a definition with no `hostDirectives` field');
+    });
+
+    it('refuses an entry that names no directive', async () => {
+      const error = await failureAfter(definition => {
+        definition['hostDirectives'] = [{ directive: NotADirective, inputs: {}, outputs: {} }];
+      });
+
+      expect(error).not.toBeInstanceOf(SignalFormsControlError);
+      expect((error as Error).message).toContain('found a `hostDirectives` entry that names no directive');
     });
   });
 

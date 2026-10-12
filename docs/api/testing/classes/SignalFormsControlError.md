@@ -2,7 +2,7 @@
 
 # Class: SignalFormsControlError
 
-Defined in: [src/testing/signal-forms-control.ts:25](https://github.com/thekhegay/ngtrue/blob/main/src/testing/signal-forms-control.ts#L25)
+Defined in: [src/testing/signal-forms-control.ts:31](https://github.com/thekhegay/ngtrue/blob/main/src/testing/signal-forms-control.ts#L31)
 
 ## Since
 
@@ -18,7 +18,7 @@ Defined in: [src/testing/signal-forms-control.ts:25](https://github.com/thekhega
 
 > **new SignalFormsControlError**(`rule`, `control`, `explanation`): `SignalFormsControlError`
 
-Defined in: [src/testing/signal-forms-control.ts:28](https://github.com/thekhegay/ngtrue/blob/main/src/testing/signal-forms-control.ts#L28)
+Defined in: [src/testing/signal-forms-control.ts:34](https://github.com/thekhegay/ngtrue/blob/main/src/testing/signal-forms-control.ts#L34)
 
 #### Parameters
 
@@ -70,7 +70,7 @@ not capture any frames.
 
 > `readonly` **rule**: [`SignalFormsControlRule`](../type-aliases/SignalFormsControlRule.md)
 
-Defined in: [src/testing/signal-forms-control.ts:26](https://github.com/thekhegay/ngtrue/blob/main/src/testing/signal-forms-control.ts#L26)
+Defined in: [src/testing/signal-forms-control.ts:32](https://github.com/thekhegay/ngtrue/blob/main/src/testing/signal-forms-control.ts#L32)
 
 ***
 

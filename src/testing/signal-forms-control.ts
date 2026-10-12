@@ -1,4 +1,10 @@
-import { isWritableSignal, type DebugElement, type OutputEmitterRef, type Type } from '@angular/core';
+import {
+  isWritableSignal,
+  resolveForwardRef,
+  type DebugElement,
+  type OutputEmitterRef,
+  type Type,
+} from '@angular/core';
 import type { ComponentFixture } from '@angular/core/testing';
 import { NG_VALUE_ACCESSOR } from '@angular/forms';
 import { FormField } from '@angular/forms/signals';
@@ -101,18 +107,86 @@ export interface SignalFormsControlOptions {
  *
  * ## What it checks
  *
- * Six rules are read off the runtime directive definition, which is where
- * Angular reads them, so the check and the framework cannot disagree: a `value`
- * or `checked` `model()`, exactly one of the two, no `ControlValueAccessor`
- * competing for the binding, and inputs named `disabled` and `readonly` beside
- * an output named `touch`. Two more are driven through the bound field: the
- * value must cross in both directions, and `touch` must actually mark the field
- * touched.
+ * Six rules are read off the runtime directive definitions, which is where
+ * Angular reads them: a `value` or `checked` `model()`, exactly one of the two,
+ * no `ControlValueAccessor` competing for the binding, and inputs named
+ * `disabled` and `readonly` beside an output named `touch`. Two more are driven
+ * through the bound field: the value must cross in both directions, and `touch`
+ * must actually mark the field touched.
  *
  * Every name is matched as Angular matches it — by the PUBLIC binding name, not
  * the class property. `value = model('', { alias: 'val' })` is a control
  * Angular will never find a model on, and the alias is invisible to anyone
  * reading the class.
+ *
+ * ## A control assembled from host directives
+ *
+ * Angular has resolved a custom control through `hostDirectives` since core 22
+ * (angular/angular#67329, "ensure custom controls resolve host directives"),
+ * and building controls that way is common enough that it reached Angular's
+ * tracker twice from people with no connection to each other: "All custom form
+ * controls use this (via the hostDirectives array)" (angular/angular#69562),
+ * and "a common pattern in our codebase" (angular/angular#66592). So the rules
+ * follow Angular's resolution rather than any one class:
+ *
+ * - **The control is a directive the template matched** — the component, or an
+ *   attribute directive — and never one of its host directives on its own.
+ * - **Its model is its own** `value` / `valueChange` (or `checked` /
+ *   `checkedChange`) pair if it has one. Otherwise it is a pair that ONE host
+ *   directive exposes, both halves from the same directive, which Angular
+ *   requires; the class property behind it can be called anything, since an
+ *   exposure may alias.
+ * - **`disabled`, `readonly` and `touch` count when the control declares them,
+ *   or when a host directive anywhere beneath it exposes them.** Exposure goes
+ *   straight to the element at every level, so a relay in between does not have
+ *   to re-expose. A member a host directive declares and does NOT expose is
+ *   never written and never listened to — the class reads complete and the
+ *   field never reaches it — so it is reported as missing, naming the
+ *   directive that holds it.
+ * - **`single-model` counts the template's directives, not host directives.** A
+ *   host directive's unexposed model is invisible to Angular, so it is not a
+ *   rival to the component's.
+ *
+ * Reading it this way has three limits, and the driven rules cover only part of
+ * them: the round trip and the touch probe go through what Angular actually
+ * connected, so they catch a wrong reading of the MODEL and of `touch`, and
+ * nothing catches one of `disabled` or `readonly`, which no fixture can turn on.
+ *
+ * The walk reads Angular's private definition fields — `hostDirectives`,
+ * including the function form the compiler emits when one is named through
+ * `forwardRef` — and those can move between minors. A definition that no longer
+ * carries the field, or an entry naming something that is not a directive, is
+ * refused with an error rather than read as having no host directives: reading
+ * none would make every host directive a candidate of its own, and a control
+ * whose `readonly` sits unexposed on a complete host directive would pass. A
+ * change in what Angular DOES with a field it can still read is what ngtrue's
+ * own spec pins, and that runs against the Angular ngtrue was tested with, not
+ * the one a consumer installs.
+ *
+ * No definition shows that a TEMPLATE applied one of the control's host
+ * directives by hand, which makes Angular treat it as the template's and drop
+ * the exposure the control declared. For the model and `touch` the driven rules
+ * fail there. For `disabled` and `readonly` the drop is harmless under the same
+ * name, because the directive the template matched publishes `disabled` itself
+ * and Angular writes it there — but an ALIASED exposure (`inputs:
+ * ['isDisabled: disabled']`) goes with the entry, and this check passes a
+ * fixture in which Angular writes neither input. Measured on core 22.2.1 and
+ * pinned in ngtrue's own spec. It is the fixture's template and not the
+ * control, which is one more reason to bind the control exactly as a consumer
+ * would and nothing more.
+ *
+ * The last has no driven rule to catch it, because Angular itself agrees with
+ * the answer. When two entries reach the same host directive, Angular merges
+ * their exposures by writing into whichever entry it met first, and that entry
+ * can belong to a SHARED behaviour directive's definition. Measured on core
+ * 22.2.1, and pinned in ngtrue's own spec so this paragraph goes when the
+ * behaviour does: a component composing a behaviour plus an extra exposure of
+ * the behaviour's own host directive adds that exposure to the behaviour
+ * itself, so every other control composing the behaviour exposes it too — once
+ * the first has rendered, for the rest of the run. Definitions are read after
+ * Angular has resolved them, so this answers with what Angular binds at that
+ * moment: a control leaning on such an exposure passes after the other
+ * component has rendered in the same run and fails without it.
  *
  * ## What it does not check, and why
  *
@@ -136,8 +210,8 @@ export interface SignalFormsControlOptions {
  *   the library's own form-field token, which ngtrue cannot know about.
  *
  * **The round trip proves the binding, not the component.** It shows that the
- * model found on the class is the one Angular connected, and that a value
- * survives the trip in both directions. It says nothing about whether the
+ * model resolved from the definitions is the one Angular connected, and that a
+ * value survives the trip in both directions. It says nothing about whether the
  * component writes its model on every path that changes the value — a control
  * that updates the field when you type and forgets to when you pick from its
  * own panel passes this and is broken. That needs the control's own
@@ -147,7 +221,11 @@ export interface SignalFormsControlOptions {
  *
  * The value is written twice and the field is marked touched, with no attempt
  * to put either back: a restore that silently failed would leave a later
- * assertion reading a value this function chose. Give it a fixture of its own.
+ * assertion reading a value this function chose. Give it a fixture of its own,
+ * bound to a field the schema leaves interactive: Signal Forms reads `touched`
+ * as false on a hidden, disabled or read-only field whatever has been marked,
+ * so the last rule refuses such a fixture rather than blaming the control for
+ * it.
  *
  * @throws {SignalFormsControlError} naming the first rule that broke. First
  *   rather than all of them, because the later rules cannot be evaluated until
@@ -167,16 +245,19 @@ export async function assertSignalFormsControl<T>(
   const control = describeControl(node);
 
   // 1 & 2. A model Angular can find, and only one of them.
-  const kinds = MODEL_KINDS.filter(kind => modelBinding(control.def, kind) !== null);
+  const kinds = MODEL_KINDS.filter(kind => control.models.some(model => model.publicName === kind));
   if (kinds.length > 1) {
+    const bound = (control.models[0] as ModelBinding).publicName;
+    const dead = bound === 'value' ? 'checked' : 'value';
     throw new SignalFormsControlError(
       'single-model',
       control.label,
-      `${control.name} declares BOTH a \`value\` and a \`checked\` model.\n\n` +
-        'Angular tests `value` first and stops at the first match, so `value` is bound and\n' +
-        'the `checked` model is never written and never read — a dead input that looks live\n' +
-        "in the template. Angular's own contract says as much in the types: FormValueControl\n" +
-        'declares `checked?: undefined` and FormCheckboxControl declares `value?: undefined`.\n\n' +
+      `${control.name} offers BOTH a \`value\` and a \`checked\` model${throughHostDirectives(control)}.\n\n` +
+        "Angular binds the first it finds — a control's own pair before an exposed one, and\n" +
+        `\`value\` before \`checked\` — so \`${bound}\` is bound and the \`${dead}\` model is never written\n` +
+        "and never read: a dead input that looks live in the template. Angular's own contract\n" +
+        'says as much in the types: FormValueControl declares `checked?: undefined` and\n' +
+        'FormCheckboxControl declares `value?: undefined`.\n\n' +
         'Pick the one that is the form value and give the other idea its own name.',
     );
   }
@@ -184,15 +265,16 @@ export async function assertSignalFormsControl<T>(
     throw new SignalFormsControlError('value-model', control.label, noModel(control));
   }
 
-  const kind = kinds[0] as ModelKind;
-  const binding = modelBinding(control.def, kind) as ModelBinding;
-  const model = (control.instance as Record<string, unknown>)[binding.classProperty];
+  // Angular's own order of preference, which `models` is already in.
+  const binding = control.models[0] as ModelBinding;
+  const kind = binding.publicName;
+  const model = read(node, binding);
   if (!isWritableSignal(model)) {
     throw new SignalFormsControlError(
       'value-model',
       control.label,
-      `${control.name} declares a \`${kind}\` input and a \`${kind}Change\` output, but\n` +
-        `\`${binding.classProperty}\` is not a writable signal.\n\n` +
+      `${control.name} has a \`${kind}\` input and a \`${kind}Change\` output, but the property\n` +
+        `behind them, \`${binding.declaredOn.name}.${binding.property}\`, is not a writable signal.\n\n` +
         'That shape is usually a hand-rolled `input()` plus `output()` standing in for a\n' +
         '`model()`. Angular tolerates it at runtime and the contract does not: both\n' +
         'FormValueControl and FormCheckboxControl type the member as `ModelSignal`. The\n' +
@@ -256,12 +338,12 @@ export async function assertSignalFormsControl<T>(
 
   // 7. The value crosses in both directions.
   //
-  // What this proves that reading the definition does not: that the model found
-  // on the class is the model Angular CONNECTED. Those can differ — a host
-  // directive contributes its own `value`/`valueChange` pair to the node, and
-  // the binding may have been made to that one instead. It also catches a
-  // control that alters the value on the way through, which the message says
-  // how to tell apart from a real defect.
+  // What this proves that reading the definitions does not: that the model
+  // resolved from them is the model Angular CONNECTED. The resolution mirrors
+  // Angular's through private fields that can move between minors, and this is
+  // where a drift shows rather than passing. It also catches a control that
+  // alters the value on the way through, which each message says how to tell
+  // apart from a real defect.
   //
   // `controlValue` rather than `value`, because `controlValue` is the signal the
   // binding reads and writes. On a plain field the two are the same; under
@@ -277,9 +359,8 @@ export async function assertSignalFormsControl<T>(
       'value-round-trip',
       control.label,
       `The field wrote ${show(inbound)} and ${control.name}'s \`${binding.publicName}\` reports ${show(model())}.\n\n` +
-        'Either the inbound half of the binding is not connected — the model on the class is\n' +
-        'not the one Angular bound, which happens when a host directive contributes a second\n' +
-        '`value` pair to the same element — or the control alters the value on the way in.\n\n' +
+        'Either the inbound half of the binding is not connected — the model resolved from the\n' +
+        'definitions is not the one Angular bound — or the control alters the value on the way in.\n\n' +
         'If it normalises on purpose, pass `values` with two values it accepts: the default\n' +
         'probes are anonymous objects, and a control that coerces will rightly refuse them.',
     );
@@ -291,15 +372,38 @@ export async function assertSignalFormsControl<T>(
     throw new SignalFormsControlError(
       'value-round-trip',
       control.label,
-      `${control.name} set \`${binding.publicName}\` to ${show(outbound)} and the field still reads ${show(state.controlValue())}.\n\n` +
-        'The outbound half is not connected, and this is the asymmetry worth testing for: a\n' +
-        'control that accepts a programmatic write and never reports an edit back looks\n' +
-        'entirely correct on screen. It renders the right value, it follows `[formField]`,\n' +
-        'and the form it is bound to keeps whatever it started with for the life of the page.',
+      `${control.name} set \`${binding.publicName}\` to ${show(outbound)} and the field reads ${show(state.controlValue())}.\n\n` +
+        'Either the outbound half is not connected, or the control changed the value again after\n' +
+        'it was set.\n\n' +
+        'The first is the asymmetry worth testing for: a control that accepts a programmatic\n' +
+        'write and never reports an edit back looks entirely correct on screen. It renders the\n' +
+        'right value, it follows `[formField]`, and the form it is bound to keeps whatever it\n' +
+        'started with for the life of the page.\n\n' +
+        'The second is a control that normalises — coerces, clamps, trims — and reports the\n' +
+        'adjusted value. If it does that on purpose, pass `values` with two values it keeps.',
     );
   }
 
   // 8. `touch` reaches the field. Last, because it cannot be undone.
+  //
+  // Two states of the FIELD make this unanswerable, and each is refused rather
+  // than reported against the control: a field that cannot be touched, and one
+  // that already is. `markAsTouched` still records the touch on a hidden,
+  // disabled or read-only field, but `touched` masks it with the field's
+  // `isNonInteractive` and reads false there, so a probe on one fails for a
+  // wired control exactly as for an unwired one.
+  const inert = (['hidden', 'disabled', 'readonly'] as const).filter(name => state[name]());
+  if (inert.length > 0) {
+    throw new SignalFormsControlError(
+      'touch-marks-touched',
+      control.label,
+      `The bound field is ${inert.join(' and ')}, so it cannot be touched: Signal Forms reads\n` +
+        '`touched` as false on a hidden, disabled or read-only field, whatever the control\n' +
+        "emits. A failure here would blame the control for the fixture's schema, and a pass\n" +
+        'is impossible.\n\n' +
+        'Bind the control to a field the schema leaves interactive, in a fixture of its own.',
+    );
+  }
   if (state.touched()) {
     throw new SignalFormsControlError(
       'touch-marks-touched',
@@ -310,18 +414,20 @@ export async function assertSignalFormsControl<T>(
         'Give this assertion a fixture of its own, freshly created and not yet blurred.',
     );
   }
-  const touchProperty = (control.def.outputs ?? {})['touch'] as string;
-  ((control.instance as Record<string, unknown>)[touchProperty] as OutputEmitterRef<void>).emit();
+  // Any one of them: Angular subscribes to the control's own `touch` and to
+  // every one its host directives expose, so emitting the first is enough.
+  (read(node, (control.outputs.get('touch') ?? [])[0] as Member) as OutputEmitterRef<void>).emit();
   await flush(fixture);
   if (!state.touched()) {
     throw new SignalFormsControlError(
       'touch-marks-touched',
       control.label,
       `${control.name} emitted \`touch\` and the field is still untouched.\n\n` +
-        'The output exists under the right name but is not the one Angular subscribed to. The\n' +
-        'usual cause is a second `touch` further up a host-directive chain, or an output\n' +
-        're-declared on a subclass so the instance carries a different emitter than the\n' +
-        'definition names.',
+        'The definitions say Angular subscribes to it, and Angular did not. The usual cause is\n' +
+        "a directive the template applies by hand that is also one of the control's host\n" +
+        "directives: Angular then treats it as the template's own and drops the exposure the\n" +
+        'control declared, which nothing in a definition shows. The other is an emitter\n' +
+        'replaced after Angular subscribed to the one the instance started with.',
     );
   }
 }
@@ -329,9 +435,18 @@ export async function assertSignalFormsControl<T>(
 const MODEL_KINDS = ['value', 'checked'] as const;
 type ModelKind = (typeof MODEL_KINDS)[number];
 
-interface ModelBinding {
+/**
+ * Where Angular delivers one public name on the element: the class that
+ * declares it — the control itself, or one of its host directives — and the
+ * class property behind it, which an alias or an exposure may have renamed.
+ */
+interface Member {
+  readonly declaredOn: Type<unknown>;
+  readonly property: string;
+}
+
+interface ModelBinding extends Member {
   readonly publicName: ModelKind;
-  readonly classProperty: string;
 }
 
 /**
@@ -341,19 +456,57 @@ interface ModelBinding {
  * name — `{ formField: ['field', 1, null] }` for a `field` input aliased to
  * `formField`. Reading the definition rather than the class also means
  * inherited members are seen, since `ɵɵInheritDefinitionFeature` has merged a
- * base class in by the time there is a definition to read.
+ * base class in by the time there is a definition to read. A base class's
+ * `hostDirectives` come with it, because `ɵɵHostDirectivesFeature` is marked
+ * to be inherited.
  */
 interface DirectiveDefinition {
   readonly inputs?: Record<string, string | readonly unknown[]>;
   readonly outputs?: Record<string, string>;
+  readonly hostDirectives?: readonly HostDirectiveEntry[] | null;
 }
 
+/**
+ * One entry of a definition's `hostDirectives`, as `ɵɵHostDirectivesFeature`
+ * leaves it: already resolved when the decorator named its directives directly,
+ * or the compiler's thunk when any of them went through `forwardRef`.
+ */
+type HostDirectiveEntry = HostDirectiveDefinition | (() => readonly HostDirectiveConfig[]);
+
+/** The resolved form. Exposure maps the directive's own public name to the name on the element. */
+interface HostDirectiveDefinition {
+  readonly directive: Type<unknown>;
+  readonly inputs: Readonly<Record<string, string>>;
+  readonly outputs: Readonly<Record<string, string>>;
+}
+
+/** What the thunk returns: a bare type, or a config whose exposure is flat `[own, exposed, …]` pairs. */
+type HostDirectiveConfig =
+  | Type<unknown>
+  | { readonly directive: Type<unknown>; readonly inputs?: readonly string[]; readonly outputs?: readonly string[] };
+
+/** A host directive somewhere beneath a control, with everything its entries expose merged. */
+interface ResolvedHostDirective {
+  readonly type: Type<unknown>;
+  readonly def: DirectiveDefinition;
+  readonly inputs: Record<string, string>;
+  readonly outputs: Record<string, string>;
+}
+
+/** The control as Angular binds it: one directive, plus whatever its host directives expose. */
 interface LocatedControl {
   readonly formField: FormField<unknown>;
-  readonly instance: object;
-  readonly def: DirectiveDefinition;
+  readonly type: Type<unknown>;
   readonly name: string;
   readonly label: string;
+  /** Every model pair on offer, in the order Angular prefers them; the first is the one it binds. */
+  readonly models: readonly ModelBinding[];
+  /** Each input Angular writes on the control's behalf, by the name on the element. */
+  readonly inputs: ReadonlyMap<string, readonly Member[]>;
+  readonly outputs: ReadonlyMap<string, readonly Member[]>;
+  /** Names a host directive declares and does not expose, with the directives that declare them. */
+  readonly unexposedInputs: ReadonlyMap<string, readonly Type<unknown>[]>;
+  readonly unexposedOutputs: ReadonlyMap<string, readonly Type<unknown>[]>;
 }
 
 /** Angular's code for "this is not a valid `[formField]` host". */
@@ -385,7 +538,9 @@ function build<T>(create: () => ComponentFixture<T>): ComponentFixture<T> {
         'output, or `checked` beside `checkedChange` — and a `model()` declares both at once,\n' +
         'which is why it is the idiom. If the names look right in the class, check for an\n' +
         'alias: Angular matches the PUBLIC binding name, so a `value` model aliased to\n' +
-        "anything else is not one. Angular's own words follow.\n\n" +
+        'anything else is not one. A control assembled from host directives needs both halves\n' +
+        'exposed by the SAME host directive — `value` in the `inputs` of its `hostDirectives`\n' +
+        "entry and `valueChange` in the `outputs`. Angular's own words follow.\n\n" +
         indent(messageOf(error)),
     );
   }
@@ -449,37 +604,53 @@ function locate<T>(fixture: ComponentFixture<T>, selector: string | undefined): 
 }
 
 /**
- * The directive on the bound node that is the candidate control.
+ * The control on the bound node, resolved the way Angular resolves it.
  *
  * A control may be a component (`<my-rating>`) or a directive on someone else's
  * element, so this cannot simply read `componentInstance`; and a node may carry
- * several directives, so it filters to the one with a model the way Angular
- * does.
+ * several directives, some of them there only as another's host directives.
+ * Angular looks for the control among the directives the TEMPLATE matched and
+ * treats each one's host directives as part of it — `initializeCustomControlStatus`
+ * in `@angular/core` takes a matched directive's own model first, and only then
+ * a pair exposed through `hostDirectiveInputs` / `hostDirectiveOutputs`, and
+ * the control it records is the matched directive either way. This does the
+ * same, so a host directive is never a candidate on its own and its unexposed
+ * members never count.
  */
 function describeControl(node: DebugElement): LocatedControl {
   const formField = node.injector.get(FormField, null, { self: true, optional: true }) as FormField<unknown>;
 
+  // Every directive on the node, in node order: `providerTokens` walks the
+  // node's slice of the view, host directives included.
   const seen = new Set<Type<unknown>>();
-  const candidates: Type<unknown>[] = [];
+  const onNode: Type<unknown>[] = [];
   const component = node.componentInstance as object | null;
   for (const token of [...((node.providerTokens ?? []) as unknown[]), component?.constructor]) {
     if (typeof token !== 'function') continue;
     const type = token as Type<unknown>;
     if (seen.has(type) || type === FormField) continue;
     seen.add(type);
-    if (definitionOf(type) !== null) candidates.push(type);
+    if (definitionOf(type) !== null) onNode.push(type);
   }
 
-  const withModel = candidates.filter(type => {
-    const def = definitionOf(type) as DirectiveDefinition;
-    return MODEL_KINDS.some(kind => modelBinding(def, kind) !== null);
-  });
+  // The template's own directives are the ones nothing on the node composes.
+  // A directive that is BOTH matched by the template and one of another's host
+  // directives lands on the composed side here, where Angular keeps it on the
+  // template's — the definitions cannot tell the two apart, and the JSDoc on
+  // `assertSignalFormsControl` says what follows, which driven rule catches it,
+  // and the one case none does.
+  const composed = new Set(
+    onNode.flatMap(type => hostDirectivesOf(definitionOf(type) as DirectiveDefinition).map(host => host.type)),
+  );
+  const matched = onNode.filter(type => !composed.has(type));
+  const surfaces = matched.map(type => surfaceOf(type, definitionOf(type) as DirectiveDefinition));
 
+  const withModel = surfaces.filter(surface => surface.models.length > 0);
   if (withModel.length > 1) {
     throw new SignalFormsControlError(
       'single-model',
       `<${tag(node)}>`,
-      `Two directives on this element declare a model: ${list(withModel.map(t => t.name))}.\n\n` +
+      `Two directives on this element offer a model: ${list(withModel.map(modelSource))}.\n\n` +
         'Angular binds the first in directive order and leaves the other inert, so which of\n' +
         'them is the control depends on declaration order rather than on intent. Put the\n' +
         'model on one of them.',
@@ -489,8 +660,8 @@ function describeControl(node: DebugElement): LocatedControl {
   // With no model anywhere, carry on with the first directive on the node so the
   // `value-model` rule can name it and print what it did declare. Reporting "no
   // control found" would describe the fixture, when what is wrong is the class.
-  const type = withModel[0] ?? candidates[0];
-  if (type === undefined) {
+  const surface = withModel[0] ?? surfaces[0];
+  if (surface === undefined) {
     throw new SignalFormsControlError(
       'value-model',
       `<${tag(node)}>`,
@@ -499,18 +670,198 @@ function describeControl(node: DebugElement): LocatedControl {
     );
   }
 
-  const instance = node.injector.get(type, null, { self: true, optional: true });
-  if (instance === null) {
-    throw new Error(`ngtrue: ${type.name} is declared on <${tag(node)}> but could not be injected from it.`);
+  return { ...surface, formField, label: `<${tag(node)}> (${surface.name})` };
+}
+
+type Surface = Omit<LocatedControl, 'formField' | 'label'>;
+
+/**
+ * Everything one matched directive offers Angular: its own inputs and outputs,
+ * then every name a host directive beneath it exposes.
+ *
+ * The members are what `setInputOnDirectives` writes and `listenToDirectiveOutput`
+ * subscribes to in `@angular/core` — the directive's own definition, and the
+ * `hostDirectiveInputs` / `hostDirectiveOutputs` Angular builds from each
+ * entry's exposure. Model pairs follow `initializeCustomControlStatus`: the
+ * directive's own `value` pair, then its own `checked` pair, then a pair ONE
+ * host directive exposes in full, `value` before `checked`.
+ */
+function surfaceOf(type: Type<unknown>, def: DirectiveDefinition): Surface {
+  const inputs = new Map<string, Member[]>();
+  const outputs = new Map<string, Member[]>();
+  const unexposedInputs = new Map<string, Type<unknown>[]>();
+  const unexposedOutputs = new Map<string, Type<unknown>[]>();
+
+  for (const [name, entry] of Object.entries(def.inputs ?? {})) {
+    add(inputs, name, { declaredOn: type, property: propertyOf(entry) });
+  }
+  for (const [name, property] of Object.entries(def.outputs ?? {})) {
+    add(outputs, name, { declaredOn: type, property });
   }
 
+  const own: ModelBinding[] = [];
+  for (const kind of MODEL_KINDS) {
+    const input = def.inputs?.[kind];
+    if (input !== undefined && Object.hasOwn(def.outputs ?? {}, `${kind}Change`)) {
+      own.push({ publicName: kind, declaredOn: type, property: propertyOf(input) });
+    }
+  }
+
+  const exposed: ModelBinding[] = [];
+  for (const host of hostDirectivesOf(def)) {
+    for (const [ownName, onElement] of Object.entries(host.inputs)) {
+      const entry = host.def.inputs?.[ownName];
+      if (entry !== undefined) add(inputs, onElement, { declaredOn: host.type, property: propertyOf(entry) });
+    }
+    for (const [ownName, onElement] of Object.entries(host.outputs)) {
+      const property = host.def.outputs?.[ownName];
+      if (property !== undefined) add(outputs, onElement, { declaredOn: host.type, property });
+    }
+    for (const name of Object.keys(host.def.inputs ?? {})) {
+      if (!Object.hasOwn(host.inputs, name)) add(unexposedInputs, name, host.type);
+    }
+    for (const name of Object.keys(host.def.outputs ?? {})) {
+      if (!Object.hasOwn(host.outputs, name)) add(unexposedOutputs, name, host.type);
+    }
+    for (const kind of MODEL_KINDS) {
+      const input = ownNameExposedAs(host.inputs, kind);
+      const output = ownNameExposedAs(host.outputs, `${kind}Change`);
+      const entry = input === undefined ? undefined : host.def.inputs?.[input];
+      if (entry !== undefined && output !== undefined) {
+        exposed.push({ publicName: kind, declaredOn: host.type, property: propertyOf(entry) });
+      }
+    }
+  }
+
+  const fromHosts = MODEL_KINDS.flatMap(kind => exposed.filter(model => model.publicName === kind));
   return {
-    formField,
-    instance: instance as object,
-    def: definitionOf(type) as DirectiveDefinition,
+    type,
     name: type.name,
-    label: `<${tag(node)}> (${type.name})`,
+    models: [...own, ...fromHosts],
+    inputs,
+    outputs,
+    unexposedInputs,
+    unexposedOutputs,
   };
+}
+
+/**
+ * Every host directive beneath a definition, at any depth, the way Angular's
+ * `findHostDirectiveDefs` collects them: nested ones first, an entry of the
+ * function form resolved through `forwardRef`, and two entries naming the same
+ * directive merged into one.
+ *
+ * The merge here is not redundant with Angular's. Angular merges by writing
+ * into the entry it met first; for the resolved form that entry is stored on a
+ * definition, so the union is already there by the time anything reads it
+ * (and leaks to other components, which the public JSDoc describes). For the
+ * function form each call builds fresh entries and nothing is written back, so
+ * a reader has to merge for itself.
+ *
+ * This follows the walk that decides what Angular WRITES, not
+ * `customControlHasInput`, which answers a narrower question and differs in one
+ * place: it skips a bare type inside the function form without looking beneath
+ * it. That method decides only whether a native element also gets the DOM
+ * property, while the input itself is written either way — so a rule about the
+ * input has to follow the write. Pinned against the installed Angular in the
+ * conformance suite's own spec.
+ *
+ * It throws rather than reading a shape it does not recognise as empty, and
+ * that is the honest-check rule applied to the walk itself. Every definition
+ * Angular builds carries `hostDirectives`, `null` when there are none, so a
+ * definition WITHOUT the key is one whose layout has moved. Reading it as "no
+ * host directives" would put each host directive among the template's own and
+ * make it a candidate control — and a host directive holding a complete control
+ * is exactly what a component that forgot to expose `readonly` composes, so the
+ * wrong reading passes the case the walk exists to fail.
+ */
+function hostDirectivesOf(def: DirectiveDefinition): readonly ResolvedHostDirective[] {
+  const found = new Map<Type<unknown>, ResolvedHostDirective>();
+  const visited = new Set<DirectiveDefinition>();
+
+  const visit = (current: DirectiveDefinition): void => {
+    if (visited.has(current)) return;
+    visited.add(current);
+    if (!Object.hasOwn(current, 'hostDirectives')) throw unreadable('a definition with no `hostDirectives` field');
+    for (const entry of current.hostDirectives ?? []) {
+      if (typeof entry === 'function') {
+        for (const config of entry()) track(resolveConfig(config));
+      } else {
+        track(entry);
+      }
+    }
+  };
+
+  const track = (entry: HostDirectiveDefinition): void => {
+    // Angular refuses a host directive with no definition (NG0307) while it
+    // renders, so an entry naming one means the entry's layout has moved, not
+    // that the fixture is wrong — and skipping it would hand that directive to
+    // the template's side, the same wrong reading as above.
+    const hostDef = typeof entry.directive === 'function' ? definitionOf(entry.directive) : null;
+    if (hostDef === null) throw unreadable('a `hostDirectives` entry that names no directive');
+    visit(hostDef);
+    const existing = found.get(entry.directive);
+    if (existing === undefined) {
+      found.set(entry.directive, {
+        type: entry.directive,
+        def: hostDef,
+        inputs: { ...entry.inputs },
+        outputs: { ...entry.outputs },
+      });
+    } else {
+      Object.assign(existing.inputs, entry.inputs);
+      Object.assign(existing.outputs, entry.outputs);
+    }
+  };
+
+  visit(def);
+  return [...found.values()];
+}
+
+/** The refusal {@link hostDirectivesOf} throws when Angular's layout is not the one it reads. */
+function unreadable(found: string): Error {
+  return new Error(
+    `ngtrue: cannot read how this control is composed — it found ${found}.\n\n` +
+      'The host-directive rules read fields Angular keeps private, and this version of\n' +
+      'Angular lays them out differently from the one ngtrue was written against. Reading\n' +
+      'the unknown shape as "no host directives" would count each host directive as a\n' +
+      'control of its own and could pass one whose `disabled` or `readonly` Angular never\n' +
+      'writes, so there is no answer here rather than a wrong one. Report it against ngtrue\n' +
+      'with the Angular version installed.',
+  );
+}
+
+function resolveConfig(config: HostDirectiveConfig): HostDirectiveDefinition {
+  if (typeof config === 'function') return { directive: resolveForwardRef(config), inputs: {}, outputs: {} };
+  return {
+    directive: resolveForwardRef(config.directive),
+    inputs: pairs(config.inputs),
+    outputs: pairs(config.outputs),
+  };
+}
+
+function pairs(flat: readonly string[] | undefined): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (let i = 0; flat !== undefined && i < flat.length; i += 2) {
+    const own = flat[i];
+    const onElement = flat[i + 1];
+    if (own !== undefined && onElement !== undefined) map[own] = onElement;
+  }
+  return map;
+}
+
+function ownNameExposedAs(exposure: Readonly<Record<string, string>>, onElement: string): string | undefined {
+  return Object.keys(exposure).find(own => exposure[own] === onElement);
+}
+
+function propertyOf(entry: string | readonly unknown[]): string {
+  return typeof entry === 'string' ? entry : (entry[0] as string);
+}
+
+function add<T>(map: Map<string, T[]>, key: string, value: T): void {
+  const values = map.get(key);
+  if (values === undefined) map.set(key, [value]);
+  else values.push(value);
 }
 
 function definitionOf(type: Type<unknown>): DirectiveDefinition | null {
@@ -518,11 +869,28 @@ function definitionOf(type: Type<unknown>): DirectiveDefinition | null {
   return holder.ɵcmp ?? holder.ɵdir ?? null;
 }
 
-function modelBinding(def: DirectiveDefinition, kind: ModelKind): ModelBinding | null {
-  const input = def.inputs?.[kind];
-  const hasChangeOutput = def.outputs !== undefined && `${kind}Change` in def.outputs;
-  if (input === undefined || !hasChangeOutput) return null;
-  return { publicName: kind, classProperty: typeof input === 'string' ? input : (input[0] as string) };
+/** The instance member a {@link Member} names, off the directive on the bound node that declares it. */
+function read(node: DebugElement, member: Member): unknown {
+  const instance = node.injector.get(member.declaredOn, null, { self: true, optional: true });
+  if (instance === null) {
+    throw new Error(
+      `ngtrue: ${member.declaredOn.name} is declared on <${tag(node)}> but could not be injected from it.`,
+    );
+  }
+  return (instance as Record<string, unknown>)[member.property];
+}
+
+/** "MyControl", or "MyControl (through its host directive ValueState)" when the model is exposed. */
+function modelSource(surface: Surface): string {
+  const model = surface.models[0];
+  return model === undefined || model.declaredOn === surface.type
+    ? surface.name
+    : `${surface.name} (through its host directive ${model.declaredOn.name})`;
+}
+
+function throughHostDirectives(control: LocatedControl): string {
+  const hosts = [...new Set(control.models.map(model => model.declaredOn))].filter(type => type !== control.type);
+  return hosts.length === 0 ? '' : `, counting what ${list(hosts.map(type => type.name))} exposes`;
 }
 
 function noModel(control: LocatedControl): string {
@@ -531,29 +899,52 @@ function noModel(control: LocatedControl): string {
     'Angular finds a custom control by name: an input `value` beside a `valueChange` output,\n' +
     'or `checked` beside `checkedChange`. A `model()` declares both at once, which is why it\n' +
     'is the idiom.\n\n' +
-    `Inputs seen: ${list(Object.keys(control.def.inputs ?? {}))}\n` +
-    `Outputs seen: ${list(Object.keys(control.def.outputs ?? {}))}\n\n` +
+    `Inputs seen: ${list([...control.inputs.keys()])}\n` +
+    `Outputs seen: ${list([...control.outputs.keys()])}\n\n` +
     'If the names look right, check for an alias — Angular matches the PUBLIC binding name.'
   );
 }
 
 function requireInput(control: LocatedControl, name: string, rule: SignalFormsControlRule, why: string): void {
-  if (control.def.inputs !== undefined && name in control.def.inputs) return;
+  if (control.inputs.has(name)) return;
   throw new SignalFormsControlError(
     rule,
     control.label,
-    `${control.name} declares no \`${name}\` input.\n\n${why}\n\n` +
-      `Inputs seen: ${list(Object.keys(control.def.inputs ?? {}))}`,
+    `${control.name} has no \`${name}\` input that Angular writes.\n\n` +
+      unexposed(control, control.unexposedInputs.get(name), name, 'inputs') +
+      `${why}\n\n` +
+      `Inputs seen: ${list([...control.inputs.keys()])}`,
   );
 }
 
 function requireOutput(control: LocatedControl, name: string, rule: SignalFormsControlRule, why: string): void {
-  if (control.def.outputs !== undefined && name in control.def.outputs) return;
+  if (control.outputs.has(name)) return;
   throw new SignalFormsControlError(
     rule,
     control.label,
-    `${control.name} declares no \`${name}\` output.\n\n${why}\n\n` +
-      `Outputs seen: ${list(Object.keys(control.def.outputs ?? {}))}`,
+    `${control.name} has no \`${name}\` output that Angular subscribes to.\n\n` +
+      unexposed(control, control.unexposedOutputs.get(name), name, 'outputs') +
+      `${why}\n\n` +
+      `Outputs seen: ${list([...control.outputs.keys()])}`,
+  );
+}
+
+/**
+ * The one sentence that turns "missing" into the actual mistake when the member
+ * exists on a host directive: it was declared and not exposed, which reads as
+ * complete in the directive's class and is invisible to Angular.
+ */
+function unexposed(
+  control: LocatedControl,
+  declaredBy: readonly Type<unknown>[] | undefined,
+  name: string,
+  kind: 'inputs' | 'outputs',
+): string {
+  if (declaredBy === undefined || declaredBy.length === 0) return '';
+  return (
+    `\`${name}\` is declared on ${list(declaredBy.map(type => type.name))}, a host directive of ${control.name}, and is\n` +
+    'not exposed. Angular binds a host directive member only when the `hostDirectives`\n' +
+    `entry lists it, so add \`'${name}'\` to that entry's \`${kind}\`.\n\n`
   );
 }
 
