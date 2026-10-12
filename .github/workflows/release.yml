@@ -50,15 +50,16 @@ jobs:
 
       - run: npm run docs:check
 
-      - name: Assert npm supports trusted publishing
+      # 11.15.0 is where `npm stage` arrived; trusted publishing needs 11.5.1.
+      - name: Assert npm supports staged trusted publishing
         run: |
-          floor=11.5.1
+          floor=11.15.0
           have=$(npm --version)
           echo "npm $have on node $(node --version)"
           IFS=. read -r fa fb fc <<<"$floor"
           IFS=. read -r ha hb hc <<<"${have%%-*}"
           if (( ha < fa || (ha == fa && (hb < fb || (hb == fb && hc < fc))) )); then
-            echo "::error::npm $have is below the $floor floor for OIDC trusted publishing. Raise node-version, or install an exact npm version, never npm@latest."
+            echo "::error::npm $have is below the $floor floor for staged trusted publishing. Raise node-version, or install an exact npm version, never npm@latest."
             exit 1
           fi
 
@@ -80,6 +81,9 @@ jobs:
 
       - run: npm run build
 
+      - name: Write the release body
+        run: npm run release:body -- "--output=$RUNNER_TEMP/release-body.md"
+
       # Staged, not direct: the trusted publisher deliberately does not allow
       # `npm publish`, so a compromised run cannot put a version in front of
       # users. The release is live once a maintainer approves it with 2FA,
@@ -100,6 +104,6 @@ jobs:
         with:
           tag_name: ${{ steps.bump.outputs.tag }}
           name: ${{ steps.bump.outputs.tag }}
-          generate_release_notes: true
+          body_path: ${{ runner.temp }}/release-body.md
           make_latest: true
           token: ${{ secrets.GITHUB_TOKEN }}
