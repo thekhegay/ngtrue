@@ -18,4 +18,5 @@
 
 export { peerDependencyMismatches, type PeerDependencyMismatchesOptions } from './peer-dependency-mismatches.js';
 export { unresolvableTypes, type ResolutionMode, type UnresolvableTypesOptions } from './unresolvable-types.js';
+export { unloadableSchematics, type UnloadableSchematicsOptions } from './unloadable-schematics.js';
 export { unresolvedExports, type UnresolvedExportsOptions } from './unresolved-exports.js';

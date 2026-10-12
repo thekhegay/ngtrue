@@ -1,0 +1,10 @@
+{
+  "name": "@fixture/schematics-self-reference",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    "./package.json": "./package.json",
+    "./schematics/*": "./schematics/*"
+  },
+  "schematics": "./schematics/collection.json"
+}

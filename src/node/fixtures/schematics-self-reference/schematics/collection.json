@@ -1,0 +1,8 @@
+{
+  "schematics": {
+    "ng-add": {
+      "description": "Names its factory by package, which resolves through the package's own exports.",
+      "factory": "@fixture/schematics-self-reference/schematics/ng-add/index.js#default"
+    }
+  }
+}

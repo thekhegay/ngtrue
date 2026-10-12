@@ -1,0 +1,16 @@
+{
+  "name": "@fixture/schematics-faults",
+  "version": "1.0.0",
+  "exports": {
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "collection.json",
+    "factories.js",
+    "schemas"
+  ],
+  "schematics": "./collection.json",
+  "ng-update": {
+    "migrations": "./migrations.json"
+  }
+}

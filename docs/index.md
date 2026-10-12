@@ -14,6 +14,7 @@ questions you only have when other people install your code:
 - Is this control really wired to Signal Forms, or does it only look wired?
 - Does the manifest describe the files the build actually produced?
 - Will the types resolve for a consumer whose `tsconfig.json` is not yours?
+- Will `ng add` and `ng update` load the schematics you ship?
 
 Anything an application developer would reach for belongs somewhere else. There
 are already good answers to most of those, and none of them know what an entry
@@ -28,7 +29,7 @@ rule the package is built around: **no export may import another export.**
 
 ```ts
 import { assertSignalFormsControl } from 'ngtrue/testing';
-import { peerDependencyMismatches, unresolvableTypes, unresolvedExports } from 'ngtrue/node';
+import { peerDependencyMismatches, unloadableSchematics, unresolvableTypes, unresolvedExports } from 'ngtrue/node';
 ```
 
 ## What is here today
@@ -39,6 +40,7 @@ import { peerDependencyMismatches, unresolvableTypes, unresolvedExports } from '
 | [`unresolvedExports`](/guide/unresolved-exports)                 | `ngtrue/node`    | Does every advertised subpath resolve to a file that exists? |
 | [`unresolvableTypes`](/guide/unresolvable-types)                 | `ngtrue/node`    | Do the types resolve under node16 and under bundler?         |
 | [`peerDependencyMismatches`](/guide/peer-dependency-mismatches)  | `ngtrue/node`    | Does the manifest match what the source imports, both ways?  |
+| [`unloadableSchematics`](/guide/unloadable-schematics)           | `ngtrue/node`    | Can the CLI load every schematic and migration you ship?     |
 
 The root entry point is empty. That is deliberate and is explained where it
 would otherwise look like an oversight.
@@ -51,8 +53,10 @@ npm install --save-dev ngtrue
 
 A dev dependency, always: nothing here belongs in a shipped bundle.
 `@angular/core` and `@angular/forms` are optional peers — `ngtrue/testing` needs
-them and `ngtrue/node` does not. So is `typescript`, which one function uses to
-run the real module resolver rather than an imitation of it.
+them and `ngtrue/node` does not. So are `typescript`, which one function uses to
+run the real module resolver rather than an imitation of it, and
+`@angular-devkit/schematics`, which another uses to load schematics with the
+devkit's own engine.
 
 ## What it will not do
 

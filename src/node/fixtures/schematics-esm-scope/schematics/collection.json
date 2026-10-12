@@ -1,0 +1,9 @@
+{
+  "schematics": {
+    "ng-add": {
+      "description": "Add the package to a workspace.",
+      "factory": "./ng-add/index#default",
+      "schema": "./ng-add/schema.json"
+    }
+  }
+}

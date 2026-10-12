@@ -17,6 +17,8 @@ export interface Manifest {
   readonly dependencies?: unknown;
   readonly peerDependencies?: unknown;
   readonly peerDependenciesMeta?: unknown;
+  readonly schematics?: unknown;
+  readonly 'ng-update'?: unknown;
 }
 
 /** An `exports` target, after conditions and fallback arrays are resolved away. */
