@@ -1,0 +1,76 @@
+name: Release PR
+
+# Cuts the release pull request from the Actions tab: bumps package.json and
+# package-lock.json and opens `chore(release): vX.Y.Z` against main. Merging it
+# (rebase or squash, so the head commit keeps that subject) is what publishes,
+# through release.yml.
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump'
+        required: true
+        type: choice
+        default: patch
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+  pull-requests: write
+  # A pull request opened with GITHUB_TOKEN starts no workflows, and main
+  # requires the CI check, so the job dispatches CI on the release branch itself.
+  actions: write
+
+jobs:
+  release-pr:
+    name: Cut release PR
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+
+      - name: Bump the version
+        id: bump
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          version=$(npm version "$BUMP" --no-git-tag-version --ignore-scripts)
+          echo "version=${version#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Write the release body
+        run: |
+          previous=$(git describe --tags --abbrev=0)
+          {
+            echo "Changes since ${previous}:"
+            echo
+            git log --format='- %s' "${previous}..HEAD"
+          } > "$RUNNER_TEMP/release-body.md"
+
+      - name: Create release PR
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: release/v${{ steps.bump.outputs.version }}
+          base: main
+          delete-branch: true
+          add-paths: |
+            package.json
+            package-lock.json
+          commit-message: 'chore(release): v${{ steps.bump.outputs.version }}'
+          title: 'chore(release): v${{ steps.bump.outputs.version }}'
+          body-path: ${{ runner.temp }}/release-body.md
+
+      - name: Run CI on the release branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: release/v${{ steps.bump.outputs.version }}
+        run: gh workflow run ci.yml --ref "$BRANCH"

@@ -1,8 +1,9 @@
 name: Release
 
 # Publishes when a `chore(release): vX.Y.Z` commit lands on main. The bump
-# itself goes through a pull request like any other change, so nothing here
-# pushes to a protected branch - the tag is all this workflow writes.
+# itself goes through a pull request like any other change - release-pr.yml
+# cuts it from the Actions tab - so nothing here pushes to a protected branch:
+# the tag is all this workflow writes.
 on:
   push:
     branches: [main]
