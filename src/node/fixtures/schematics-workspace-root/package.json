@@ -1,0 +1,11 @@
+{
+  "name": "@fixture/schematics-workspace-root",
+  "version": "1.0.0",
+  "workspaces": [
+    "member"
+  ],
+  "exports": {
+    "./package.json": "./package.json"
+  },
+  "schematics": "./collection.json"
+}

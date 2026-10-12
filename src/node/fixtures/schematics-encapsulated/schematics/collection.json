@@ -1,0 +1,9 @@
+{
+  "encapsulation": true,
+  "schematics": {
+    "ng-add": {
+      "description": "CommonJS under a module manifest, which the CLI's wrapper loads anyway.",
+      "factory": "./ng-add/index#default"
+    }
+  }
+}

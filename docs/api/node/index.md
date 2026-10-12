@@ -19,6 +19,7 @@ assertion IS the test; here the assertion belongs to the caller.
 ## Interfaces
 
 - [PeerDependencyMismatchesOptions](interfaces/PeerDependencyMismatchesOptions.md)
+- [UnloadableSchematicsOptions](interfaces/UnloadableSchematicsOptions.md)
 - [UnresolvableTypesOptions](interfaces/UnresolvableTypesOptions.md)
 - [UnresolvedExportsOptions](interfaces/UnresolvedExportsOptions.md)
 
@@ -29,5 +30,6 @@ assertion IS the test; here the assertion belongs to the caller.
 ## Functions
 
 - [peerDependencyMismatches](functions/peerDependencyMismatches.md)
+- [unloadableSchematics](functions/unloadableSchematics.md)
 - [unresolvableTypes](functions/unresolvableTypes.md)
 - [unresolvedExports](functions/unresolvedExports.md)

@@ -1,0 +1,8 @@
+{
+  "schematics": {
+    "ng-add": {
+      "description": "Packed only when npm packs the root rather than its workspaces.",
+      "factory": "./factories#ngAdd"
+    }
+  }
+}

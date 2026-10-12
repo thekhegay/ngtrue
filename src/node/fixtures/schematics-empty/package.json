@@ -1,0 +1,11 @@
+{
+  "name": "@fixture/schematics-empty",
+  "version": "1.0.0",
+  "exports": {
+    "./package.json": "./package.json"
+  },
+  "schematics": "./collection.json",
+  "ng-update": {
+    "migrations": "/schematics/migrations.json"
+  }
+}

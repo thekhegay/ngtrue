@@ -1,0 +1,14 @@
+{
+  "name": "@fixture/schematics-encapsulated",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    "./package.json": "./package.json"
+  },
+  "schematics": "./schematics/collection.json",
+  "ng-update": {
+    "migrations": [
+      "./schematics/migrations.json"
+    ]
+  }
+}

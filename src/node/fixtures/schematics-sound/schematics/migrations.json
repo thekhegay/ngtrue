@@ -1,0 +1,9 @@
+{
+  "schematics": {
+    "migration-v2": {
+      "version": "2.0.0",
+      "description": "Rename what 2.0.0 renamed.",
+      "factory": "./migrations/v2/index#default"
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "schematics": {
+    "migration-v2": {
+      "version": "2.0.0",
+      "description": "On disk, and left out of `files`.",
+      "factory": "./factories#fine"
+    }
+  }
+}

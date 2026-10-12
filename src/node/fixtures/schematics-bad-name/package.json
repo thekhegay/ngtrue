@@ -1,0 +1,5 @@
+{
+  "name": "../../outside",
+  "version": "1.0.0",
+  "schematics": "./collection.json"
+}

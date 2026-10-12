@@ -22,6 +22,7 @@ here are the ones you only have when other people install your code:
 - Is this control really wired to Signal Forms, or does it only look wired?
 - Does the manifest describe the files the build actually produced?
 - Will the types resolve for a consumer whose `tsconfig.json` is not yours?
+- Will `ng add` and `ng update` load the schematics you ship?
 
 ## Install
 
@@ -29,9 +30,9 @@ here are the ones you only have when other people install your code:
 npm install --save-dev ngtrue
 ```
 
-Always a dev dependency. `@angular/core`, `@angular/forms` and `typescript` are
-optional peers — each is needed by one entry point, and the entry point that
-does not need them works without them.
+Always a dev dependency. `@angular/core`, `@angular/forms`, `typescript` and
+`@angular-devkit/schematics` are optional peers — each is needed by one entry
+point, and the entry point that does not need them works without them.
 
 ## Three entry points
 
@@ -68,7 +69,7 @@ evaporate in silence.
 ## `ngtrue/node`
 
 ```ts
-import { peerDependencyMismatches, unresolvableTypes, unresolvedExports } from 'ngtrue/node';
+import { peerDependencyMismatches, unloadableSchematics, unresolvableTypes, unresolvedExports } from 'ngtrue/node';
 
 it('ships every file it advertises', () => {
   expect(unresolvedExports({ packageDir: 'dist' })).toEqual([]);
@@ -80,6 +81,10 @@ it('resolves its types the way a consumer will', async () => {
 
 it('declares what it imports, and imports what it declares', () => {
   expect(peerDependencyMismatches({ packageDir: '.', tsconfig: 'tsconfig.build.json' })).toEqual([]);
+});
+
+it('ships schematics the CLI can load', async () => {
+  expect(await unloadableSchematics({ packageDir: 'dist' })).toEqual([]);
 });
 ```
 

@@ -1,0 +1,26 @@
+{
+  "schematics": {
+    "fine": {
+      "description": "Loads, and is here so a finding is shown to be about one entry rather than the collection.",
+      "factory": "./factories#fine",
+      "schema": "./schemas/fine.json"
+    },
+    "not-a-function": {
+      "description": "Exports an object where the devkit expects a rule factory.",
+      "factory": "./factories#notAFunction"
+    },
+    "missing-export": {
+      "description": "Names an export the module does not have.",
+      "factory": "./factories#renamed"
+    },
+    "missing-schema": {
+      "description": "Declares a schema the build never copied.",
+      "factory": "./factories#fine",
+      "schema": "./schemas/never-copied.json"
+    },
+    "missing-module": {
+      "description": "Points at a module the build stopped emitting.",
+      "factory": "./not-emitted#default"
+    }
+  }
+}

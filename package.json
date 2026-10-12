@@ -58,11 +58,15 @@
     "pretest:watch": "npm run build && npm run fixtures"
   },
   "peerDependencies": {
+    "@angular-devkit/schematics": ">=22.0.0",
     "@angular/core": ">=22.0.0",
     "@angular/forms": ">=22.0.0",
     "typescript": ">=5.4.0 <7.0.0"
   },
   "peerDependenciesMeta": {
+    "@angular-devkit/schematics": {
+      "optional": true
+    },
     "@angular/core": {
       "optional": true
     },
@@ -74,6 +78,7 @@
     }
   },
   "devDependencies": {
+    "@angular-devkit/schematics": "^22.2.2",
     "@angular/common": "^22.1.7",
     "@angular/compiler": "^22.1.7",
     "@angular/compiler-cli": "^22.1.7",
