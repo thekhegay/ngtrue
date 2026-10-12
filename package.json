@@ -56,6 +56,7 @@
     "docs:build": "vitepress build docs",
     "release:prepare": "node scripts/release.mjs prepare",
     "release:body": "node scripts/release.mjs body",
+    "release:check": "node scripts/release.mjs check",
     "pretest": "npm run build && npm run fixtures",
     "pretest:watch": "npm run build && npm run fixtures"
   },
