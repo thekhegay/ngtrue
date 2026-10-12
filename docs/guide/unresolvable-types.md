@@ -58,11 +58,45 @@ fixes.
 open set and a single sample would say nothing about the rest. It appears in the
 returned array so it cannot be mistaken for a pass.
 
+**A subpath only a stylesheet compiler can reach is skipped, silently.** When
+every target sits under a `sass` or `style` condition, TypeScript matches none
+of them and there is no types question to ask:
+
+```json
+{
+  "exports": {
+    "./theme": { "sass": "./theme/_index.scss" },
+    "./overlay-prebuilt.css": { "style": "./overlay-prebuilt.css" }
+  }
+}
+```
+
+The skip goes by condition, not by file extension. A subpath with any other
+target is probed like the rest, so `{ "sass": "./_theme.scss", "default":
+"./theme.js" }` with no `types` is reported under both modes — a TypeScript
+import lands on that `.js`. So is a bare string pointing at a `.css` file, which
+offers the file to every condition, TypeScript's included. A subpath blocked
+with `null` is not probed: blocking it is the point.
+
+What the skip cannot tell is intent. A subpath meant for TypeScript as well —
+`{ "sass": …, "types": …, "default": … }` — that loses its `types` and
+`default` to a manifest generator reads exactly like a stylesheet entry, and is
+skipped. `unresolvedExports` does not catch it either, because the stylesheet
+it still names exists. Only a test that knows your list of entry points can
+ask whether each one is still there.
+
 **Only the conditions the package declares are probed.** An ESM-only package has
 no `require` branch, and reporting one missing would be reporting a design
 decision as a defect. Whether a package IS dual is a question about the
 manifest, and [`unresolvedExports`](/guide/unresolved-exports) is where the
 manifest is the subject.
+
+**A probe of nothing is reported.** A package whose every subpath is a
+wildcard, a stylesheet, `null` or `./package.json` — or that has no `exports`
+at all — gets one sentence saying nothing was checked, rather than an empty
+array that reads as "its types resolve". Without `exports`, every file in a
+package is importable, so probing the root alone would be one sample of an open
+set, the same reason a wildcard is not probed.
 
 **`typescript` must be installed.** It is an optional peer of ngtrue and this is
 the only export that needs it. Any repository shipping a typed package has it;

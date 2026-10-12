@@ -11,6 +11,12 @@
       "types": "./dist/node/index.d.ts",
       "default": "./dist/node/index.js"
     },
+    "./styles": {
+      "sass": "./dist/_index.scss"
+    },
+    "./prebuilt.css": {
+      "style": "./dist/prebuilt.css"
+    },
     "./package.json": "./package.json"
   },
   "dependencies": {

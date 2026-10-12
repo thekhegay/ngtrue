@@ -2,7 +2,7 @@
 
 # Interface: PeerDependencyMismatchesOptions
 
-Defined in: [src/node/peer-dependency-mismatches.ts:9](https://github.com/thekhegay/ngtrue/blob/main/src/node/peer-dependency-mismatches.ts#L9)
+Defined in: [src/node/peer-dependency-mismatches.ts:10](https://github.com/thekhegay/ngtrue/blob/main/src/node/peer-dependency-mismatches.ts#L10)
 
 ## Since
 
@@ -14,7 +14,7 @@ Defined in: [src/node/peer-dependency-mismatches.ts:9](https://github.com/thekhe
 
 > `readonly` **packageDir**: `string`
 
-Defined in: [src/node/peer-dependency-mismatches.ts:11](https://github.com/thekhegay/ngtrue/blob/main/src/node/peer-dependency-mismatches.ts#L11)
+Defined in: [src/node/peer-dependency-mismatches.ts:12](https://github.com/thekhegay/ngtrue/blob/main/src/node/peer-dependency-mismatches.ts#L12)
 
 The directory holding the `package.json` to check.
 
@@ -24,7 +24,7 @@ The directory holding the `package.json` to check.
 
 > `readonly` `optional` **sourceDir?**: `string`
 
-Defined in: [src/node/peer-dependency-mismatches.ts:16](https://github.com/thekhegay/ngtrue/blob/main/src/node/peer-dependency-mismatches.ts#L16)
+Defined in: [src/node/peer-dependency-mismatches.ts:17](https://github.com/thekhegay/ngtrue/blob/main/src/node/peer-dependency-mismatches.ts#L17)
 
 The directory holding the sources that SHIP, relative to `packageDir` or
 absolute. Defaults to `src`.
@@ -35,13 +35,13 @@ absolute. Defaults to `src`.
 
 > `readonly` `optional` **tsconfig?**: `string`
 
-Defined in: [src/node/peer-dependency-mismatches.ts:24](https://github.com/thekhegay/ngtrue/blob/main/src/node/peer-dependency-mismatches.ts#L24)
+Defined in: [src/node/peer-dependency-mismatches.ts:25](https://github.com/thekhegay/ngtrue/blob/main/src/node/peer-dependency-mismatches.ts#L25)
 
 A build tsconfig whose `exclude` says which files do not ship.
 
-Prefer this to [exclude](#exclude). The compiler already knows what is left out
-of the package, and restating it here means two lists that agree until
-someone adds a third kind of test file to one of them.
+Prefer this to restating the list in [exclude](#exclude). The compiler already
+knows what is left out of the package, and a second copy means two lists
+that agree until someone adds a third kind of test file to one of them.
 
 ***
 
@@ -49,10 +49,27 @@ someone adds a third kind of test file to one of them.
 
 > `readonly` `optional` **exclude?**: readonly `string`[]
 
-Defined in: [src/node/peer-dependency-mismatches.ts:29](https://github.com/thekhegay/ngtrue/blob/main/src/node/peer-dependency-mismatches.ts#L29)
+Defined in: [src/node/peer-dependency-mismatches.ts:47](https://github.com/thekhegay/ngtrue/blob/main/src/node/peer-dependency-mismatches.ts#L47)
 
-Glob-ish patterns for files that do not ship, used when `tsconfig` is not
-given. `*` matches within a path segment, `**` across segments.
+Patterns for files to leave out, relative to `packageDir`. `*` matches
+within a path segment, `**` across segments, and a pattern that names a
+directory leaves out everything under it — the reading TypeScript gives
+its own `exclude`.
+
+**With `tsconfig`, these are added to its list**, and that is what they are
+for there: a subtree that ships and runs inside somebody else's program.
+Schematics are the case that needed it. The Angular CLI runs them and
+brings `@angular-devkit/schematics` and `@schematics/angular` itself, so a
+library imports both from `schematics/` and declares neither — on ngwr
+those were two of this check's eleven findings, and its own spec had
+skipped the directory for exactly that reason (`SKIP = ['schematics',
+'mcp']`, ngwr faf216cd). The build tsconfig cannot say so, because the
+files are not left out of the package; they are left out of this question.
+`exclude: ['schematics']` beside `tsconfig` says it.
+
+**Without `tsconfig`, they replace the default list** — specs, tests,
+declaration files and fixtures — so a caller who passes them owns the whole
+list.
 
 ***
 
@@ -60,7 +77,7 @@ given. `*` matches within a path segment, `**` across segments.
 
 > `readonly` `optional` **ignore?**: readonly `string`[]
 
-Defined in: [src/node/peer-dependency-mismatches.ts:35](https://github.com/thekhegay/ngtrue/blob/main/src/node/peer-dependency-mismatches.ts#L35)
+Defined in: [src/node/peer-dependency-mismatches.ts:53](https://github.com/thekhegay/ngtrue/blob/main/src/node/peer-dependency-mismatches.ts#L53)
 
 Packages to leave out of both directions, for the cases neither a manifest
 nor a source scan can settle — a peer that exists to pin a transitive

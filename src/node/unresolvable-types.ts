@@ -54,11 +54,49 @@ export interface UnresolvableTypesOptions {
  * for a pass. Each one stands for an open set, and a single sample would say
  * nothing about the rest of it.
  *
+ * **A subpath only a stylesheet tool can reach is not probed.** When every
+ * target sits under a `sass` or `style` condition — ngwr's
+ * `"./theme": { "sass": "./theme/_index.scss", … }` family, or the CDK's
+ * `"./overlay-prebuilt.css": { "style": "./overlay-prebuilt.css" }` — TypeScript
+ * matches none of them, and the resolver answers "does not resolve" for a
+ * subpath that was never meant for it. On ngwr's built package that was ten of
+ * the twelve lines this returned; on `@angular/cdk` it was all twelve. The same
+ * question reached arethetypeswrong from outside
+ * (arethetypeswrong/arethetypeswrong.github.io#183, and #30 asks to ignore an
+ * entry), which offers `--exclude-entrypoints` for it; here the manifest
+ * already says which subpaths are stylesheets, whenever it says so with a
+ * condition. A target of `null` counts as unreachable for the same reason —
+ * blocking a subpath is the point of writing one.
+ *
+ * What the skip cannot tell is intent. A subpath that is MEANT for TypeScript
+ * as well — ngwr's `./theme` carries `types` and `default` beside its `sass` —
+ * and loses those two conditions to a manifest generator reads exactly like a
+ * stylesheet entry, so it is skipped and nothing here reports it;
+ * `unresolvedExports` does not either, since the stylesheet it still names
+ * exists. Whether every TypeScript entry point is still in `exports` is a
+ * question about the list, and only a test that knows the list can ask it.
+ *
+ * The skip goes by condition and not by file extension, so a subpath with any
+ * other target is probed like the rest. `{ "sass": …, "default": "./theme.js" }`
+ * with no `types` is reported under both modes, because a TypeScript import
+ * does land on that `.js`. A bare string pointing at a `.css` file — the shape
+ * in #183 — is probed too: it offers the file to every condition, TypeScript's
+ * included, and what a TypeScript import of it gets is the question this check
+ * answers.
+ *
  * **Only the conditions this package actually declares are probed.** An
  * ESM-only package has no `require` branch, and reporting one missing would be
  * reporting a design decision as a defect. If a package means to be dual, the
  * check that it IS dual belongs in `unresolvedExports`, where the manifest is
  * the subject.
+ *
+ * **A probe of nothing is reported, not passed.** A package whose every subpath
+ * is a wildcard, a stylesheet, `null` or `./package.json` — or that has no
+ * `exports` at all — gets one sentence saying nothing was checked, rather than
+ * an empty array that reads as "its types resolve". A package without `exports`
+ * is not probed through `types` and `main` instead: without a map every file
+ * in it is importable, so the root alone would be one sample of an open set —
+ * the reason a wildcard is not probed either.
  *
  * **`typescript` has to be installed.** It is an optional peer dependency of
  * ngtrue, and this is the only function that needs it. Any repository shipping
@@ -78,7 +116,13 @@ export async function unresolvableTypes(options: UnresolvableTypesOptions): Prom
     return [`${packageDir}/package.json has no "name", so nothing can import it by a package specifier.`];
   }
 
-  const subpaths = [...new Set(exportTargets(manifest).map(target => target.subpath))].sort();
+  const subpaths = [
+    ...new Set(
+      exportTargets(manifest)
+        .filter(target => target.target !== null && !target.conditions.some(c => STYLESHEET_CONDITIONS.has(c)))
+        .map(target => target.subpath),
+    ),
+  ].sort();
   const problems: string[] = [];
   const specifiers: string[] = [];
 
@@ -94,7 +138,17 @@ export async function unresolvableTypes(options: UnresolvableTypesOptions): Prom
     specifiers.push(subpath === '.' ? name : `${name}/${subpath.slice(2)}`);
   }
 
-  if (specifiers.length === 0) return problems;
+  if (specifiers.length === 0) {
+    // Two sentences, because "cannot be imported" would be false for both: a
+    // package with no `exports` is imported through `types` and `main`, and a
+    // wildcard subpath is importable and merely unprobed.
+    const why =
+      manifest.exports === undefined || manifest.exports === null
+        ? `${name} has no \`exports\` map, and only the subpaths one declares are probed`
+        : `no subpath of ${name} was probed: \`exports\` lists none that is not a wildcard, a stylesheet, ` +
+          '`null` or ./package.json';
+    return [...problems, `${why}, so nothing was checked.`];
+  }
 
   const probe = stageProbe(name, packageDir);
   try {
@@ -120,6 +174,12 @@ export async function unresolvableTypes(options: UnresolvableTypesOptions): Prom
 
   return problems;
 }
+
+/**
+ * The conditions Sass's own `pkg:` importer and the Angular CLI resolve a
+ * stylesheet through. TypeScript's own conditions include neither.
+ */
+const STYLESHEET_CONDITIONS = new Set(['sass', 'style']);
 
 interface TypeScriptApi {
   readonly sys: unknown;

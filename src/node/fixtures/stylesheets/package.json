@@ -1,0 +1,10 @@
+{
+  "name": "fixture-stylesheets",
+  "version": "1.0.0",
+  "exports": {
+    ".": {
+      "sass": "./_index.scss"
+    },
+    "./package.json": "./package.json"
+  }
+}

@@ -12,4 +12,5 @@ export const FIXTURES = {
   broken: `${here}/broken`,
   noExports: `${here}/no-exports`,
   nameless: `${here}/nameless`,
+  stylesheets: `${here}/stylesheets`,
 } as const;
