@@ -4,7 +4,7 @@
 
 > **unresolvableTypes**(`options`): `Promise`\<readonly `string`[]\>
 
-Defined in: [src/node/unresolvable-types.ts:110](https://github.com/thekhegay/ngtrue/blob/main/src/node/unresolvable-types.ts#L110)
+Defined in: [src/node/unresolvable-types.ts:115](https://github.com/thekhegay/ngtrue/blob/main/src/node/unresolvable-types.ts#L115)
 
 Every subpath whose TYPES do not resolve, under each mode, as one sentence
 each. An empty array is a pass.
@@ -40,13 +40,18 @@ for a pass. Each one stands for an open set, and a single sample would say
 nothing about the rest of it.
 
 **A subpath only a stylesheet tool can reach is not probed.** When every
-target sits under a `sass` or `style` condition — ngwr's
-`"./theme": { "sass": "./theme/_index.scss", … }` family, or the CDK's
-`"./overlay-prebuilt.css": { "style": "./overlay-prebuilt.css" }` — TypeScript
+target sits under a stylesheet condition — `sass`, `style`, `less`, `css`,
+`scss` or `stylus`, the set `unexportedTypes` leaves out as well — TypeScript
 matches none of them, and the resolver answers "does not resolve" for a
-subpath that was never meant for it. On ngwr's built package that was ten of
-the twelve lines this returned; on `@angular/cdk` it was all twelve. The same
-question reached arethetypeswrong from outside
+subpath that was never meant for it. ngwr's
+`"./theme": { "sass": "./theme/_index.scss", … }` family and the CDK's
+`"./overlay-prebuilt.css": { "style": "./overlay-prebuilt.css" }` were ten of
+the twelve lines this returned on ngwr's built package and all twelve on
+`@angular/cdk`. With only those two conditions skipped, ng-zorro-antd 22.1.2
+still got 69 lines, every one a wildcard only `less` and `style` reach —
+`"./*.less": { "less": "./*.less" }` and one per component — and
+angular-split 20.0.0 got two, both for `"./theme": { "css": "./theme.css" }`.
+The same question reached arethetypeswrong from outside
 (arethetypeswrong/arethetypeswrong.github.io#183, and #30 asks to ignore an
 entry), which offers `--exclude-entrypoints` for it; here the manifest
 already says which subpaths are stylesheets, whenever it says so with a

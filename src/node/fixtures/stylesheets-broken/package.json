@@ -1,0 +1,24 @@
+{
+  "name": "fixture-stylesheets-broken",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./*.less": {
+      "less": "./*.less"
+    },
+    "./button/style/*": {
+      "less": "./button/style/*.less",
+      "style": "./button/style/index.css",
+      "default": "./button/style/*.js"
+    },
+    "./theme": {
+      "css": "./theme.css",
+      "default": "./theme.js"
+    },
+    "./package.json": "./package.json"
+  }
+}

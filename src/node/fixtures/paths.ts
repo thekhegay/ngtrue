@@ -13,6 +13,8 @@ export const FIXTURES = {
   noExports: `${here}/no-exports`,
   nameless: `${here}/nameless`,
   stylesheets: `${here}/stylesheets`,
+  stylesheetsSound: `${here}/stylesheets-sound`,
+  stylesheetsBroken: `${here}/stylesheets-broken`,
   schematicsSound: `${here}/schematics-sound`,
   schematicsEsmScope: `${here}/schematics-esm-scope`,
   schematicsIgnored: `${here}/schematics-ignored`,

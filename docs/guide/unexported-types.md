@@ -139,8 +139,10 @@ cannot be mistaken for a clean one.
 subpath that does not load is reported rather than read; why it does not load
 is [`unresolvableTypes`](/guide/unresolvable-types)'s question.
 
-Subpaths that are not code — a `sass` or `style` condition, a `.json` target —
-are left out, since no import of them can carry a type.
+Subpaths that are not code — a stylesheet condition such as `sass`, `style` or
+`less`, a `.json` target — are left out, since no import of them can carry a
+type. The conditions are the set [`unresolvableTypes`](/guide/unresolvable-types)
+skips too.
 
 **`typescript` must be installed.** It is an optional peer of ngtrue, needed by
 this export, by [`unresolvableTypes`](/guide/unresolvable-types) and by

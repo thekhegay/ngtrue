@@ -3,7 +3,7 @@ import { isAbsolute, relative, resolve, sep } from 'node:path';
 
 import type * as TS from 'typescript';
 
-import { exportTargets, readManifest, type ExportTarget } from './manifest.js';
+import { STYLESHEET_CONDITIONS, exportTargets, readManifest, type ExportTarget } from './manifest.js';
 import { loadTypeScript, stageProbe, type TypeScript } from './probe.js';
 
 /**
@@ -179,9 +179,10 @@ export interface UnexportedTypesOptions {
  * load here is reported rather than read, because its exports going uncounted
  * would turn into findings against every type it exports.
  *
- * Subpaths that are not code — a `sass` or `style` condition, a `.json` or
- * `.scss` target — are left out without a word: no import of them can carry a
- * type, so there is nothing to read or to count.
+ * Subpaths that are not code — a stylesheet condition (`sass`, `style`,
+ * `less`, `css`, `scss` or `stylus`, the set `unresolvableTypes` skips too), a
+ * `.json` or `.scss` target — are left out without a word: no import of them
+ * can carry a type, so there is nothing to read or to count.
  *
  * A run that read nothing says so rather than returning an empty array: a
  * package whose every subpath is a stylesheet, a wildcard or a file that does
@@ -558,23 +559,22 @@ function read(
  * Every subpath with at least one target an import could carry a type
  * through, sorted so `"."` comes first and owns whatever it exports.
  *
- * A target under a `sass` or `style` condition, or one ending in an extension
- * that is not script or declaration, is a stylesheet or a data file. No import
- * of it can name a type, so it neither exports anything nor needs reading. A
- * target with no extension at all (`"./schematics/*"`, a bare directory) might
- * be either, and is kept.
+ * A target under a stylesheet condition — the set `unresolvableTypes` skips
+ * too — or one ending in an extension that is not script or declaration, is a
+ * stylesheet or a data file. No import of it can name a type, so it neither
+ * exports anything nor needs reading. A target with no extension at all
+ * (`"./schematics/*"`, a bare directory) might be either, and is kept.
  */
 function codeSubpaths(targets: readonly ExportTarget[]): readonly string[] {
   const code = targets.filter(
     ({ target, conditions }) =>
       target !== null &&
-      !conditions.some(condition => STYLE_CONDITIONS.has(condition)) &&
+      !conditions.some(condition => STYLESHEET_CONDITIONS.has(condition)) &&
       (CODE_EXTENSION.test(target) || !/\.[^/]*$/.test(target)),
   );
   return [...new Set(code.map(entry => entry.subpath))].sort();
 }
 
-const STYLE_CONDITIONS = new Set(['sass', 'style', 'css', 'scss', 'less', 'stylus']);
 const CODE_EXTENSION = /\.(?:[cm]?[jt]s|[jt]sx)$/;
 
 /** A declaration a consumer could import by name, if anything exported it. */
