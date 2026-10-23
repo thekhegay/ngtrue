@@ -5,7 +5,10 @@ import { unresolvableTypes } from './unresolvable-types.js';
 
 const wildcard = (subpath: string) =>
   `exports["${subpath}"] is a wildcard and was not probed — one sample would say nothing about the rest of ` +
-  'the set. Check it by hand, or list the subpaths literally.';
+  'the set. Check it by hand, list the subpaths literally, or acknowledge it in `ignore`.';
+
+const stale = (entry: string) =>
+  `ignore lists "${entry}", which is not a subpath this check would have reported — the entry exempts nothing.`;
 
 describe('unresolvableTypes', () => {
   it('finds nothing wrong with a package whose types resolve both ways', async () => {
@@ -120,6 +123,71 @@ describe('unresolvableTypes', () => {
 
     expect(one.length).toBeLessThan(both.length);
     expect(one.some(problem => problem.includes('bundler'))).toBe(false);
+  });
+
+  describe('ignore', () => {
+    it('acknowledges a wildcard, and excuses a literal subpath under every mode', async () => {
+      // `.` is still probed and still resolves, which is what makes `[]` a pass
+      // here rather than a run that checked nothing.
+      const problems = await unresolvableTypes({
+        packageDir: FIXTURES.stylesheetsBroken,
+        ignore: ['./button/style/*', './theme'],
+      });
+
+      expect(problems).toEqual([]);
+    });
+
+    it('excuses the subpaths it lists and nothing else', async () => {
+      const all = await unresolvableTypes({ packageDir: FIXTURES.broken });
+      const problems = await unresolvableTypes({ packageDir: FIXTURES.broken, ignore: ['./locales/*', './theme'] });
+
+      // Three lines go — the wildcard, and `./theme` under each mode — and
+      // every other finding about `broken/` stays where it was.
+      expect(problems).toEqual(
+        all.filter(problem => problem !== wildcard('./locales/*') && !problem.startsWith('@fixture/broken/theme ')),
+      );
+      expect(all.length - problems.length).toBe(3);
+    });
+
+    it('reports an entry that exempts nothing, because the list is a claim about the package', async () => {
+      // `./*.less` and `./theme` are stylesheets and skipped before anything is
+      // reported, `.` resolves under both modes, and `./gone` is not in
+      // `exports` at all.
+      const problems = await unresolvableTypes({
+        packageDir: FIXTURES.stylesheetsSound,
+        ignore: ['./*.less', './theme', '.', './gone'],
+      });
+
+      expect(problems).toEqual([stale('./*.less'), stale('./theme'), stale('.'), stale('./gone')]);
+    });
+
+    it('does not let excusing every subpath turn checking nothing into a pass', async () => {
+      // No subpath of `broken/` resolves to declarations. Each line about one
+      // is excused, and what is left is still a run in which no types resolved.
+      // `[]` here would be a vacuous pass.
+      const problems = await unresolvableTypes({
+        packageDir: FIXTURES.broken,
+        ignore: ['.', './absolute', './folder', './gone', './locales/*', './theme'],
+      });
+
+      expect(problems).toEqual([
+        'no subpath of @fixture/broken resolved to declarations, and every one that was probed is listed in ' +
+          '`ignore`, so nothing was checked.',
+      ]);
+
+      // Leave one out and its findings are the answer. The sentence above
+      // would be false beside them, as it would be with no `ignore` at all,
+      // so it is said only when every probed subpath is listed.
+      const partly = await unresolvableTypes({
+        packageDir: FIXTURES.broken,
+        ignore: ['.', './absolute', './folder', './gone', './locales/*'],
+      });
+
+      expect(partly).toEqual([
+        expect.stringMatching(/^@fixture\/broken\/theme resolves under node16 to /),
+        expect.stringMatching(/^@fixture\/broken\/theme resolves under bundler to /),
+      ]);
+    });
   });
 
   it('answers about the manifest when there is no name to import by', async () => {

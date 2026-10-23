@@ -19,6 +19,24 @@ export interface UnresolvableTypesOptions {
    * its own repository uses will still break for half its consumers.
    */
   readonly modes?: readonly ResolutionMode[];
+  /**
+   * Subpaths, spelled as they are in `exports` (`"./schematics/*"`), whose
+   * findings are decisions rather than defects.
+   *
+   * A wildcard listed here is acknowledged as unprobed: ngwr's
+   * `"./i18n/*.json"` locale catalogues and `"./schematics/*"` factories are
+   * not for a TypeScript import to reach, and ngwr excused the two sentences
+   * about them by their opening words for want of this. A literal subpath
+   * listed here is still probed under every mode, and what it reports is
+   * excused — a bare string naming a `.css` file, say, which no TypeScript
+   * import is meant to resolve.
+   *
+   * An entry that exempts nothing is reported: a subpath whose types resolve,
+   * one skipped as a stylesheet, one the manifest does not have. An exemption
+   * list is a claim about the package, and one that outlived the thing it
+   * excused says something false the next time somebody reads it.
+   */
+  readonly ignore?: readonly string[];
 }
 
 /**
@@ -53,7 +71,8 @@ export interface UnresolvableTypesOptions {
  *
  * **Wildcard subpaths are skipped**, and the skip is reported so it cannot pass
  * for a pass. Each one stands for an open set, and a single sample would say
- * nothing about the rest of it.
+ * nothing about the rest of it. One that no TypeScript import is meant to
+ * reach is acknowledged in `ignore`.
  *
  * **A subpath only a stylesheet tool can reach is not probed.** When every
  * target sits under a stylesheet condition — `sass`, `style`, `less`, `css`,
@@ -71,8 +90,9 @@ export interface UnresolvableTypesOptions {
  * (arethetypeswrong/arethetypeswrong.github.io#183, and #30 asks to ignore an
  * entry), which offers `--exclude-entrypoints` for it; here the manifest
  * already says which subpaths are stylesheets, whenever it says so with a
- * condition. A target of `null` counts as unreachable for the same reason —
- * blocking a subpath is the point of writing one.
+ * condition, and `ignore` takes the rest. A target of `null` counts as
+ * unreachable for the same reason — blocking a subpath is the point of writing
+ * one.
  *
  * What the skip cannot tell is intent. A subpath that is MEANT for TypeScript
  * as well — ngwr's `./theme` carries `types` and `default` beside its `sass` —
@@ -88,7 +108,8 @@ export interface UnresolvableTypesOptions {
  * does land on that `.js`. A bare string pointing at a `.css` file — the shape
  * in #183 — is probed too: it offers the file to every condition, TypeScript's
  * included, and what a TypeScript import of it gets is the question this check
- * answers.
+ * answers. A package that keeps that shape on purpose says so in `ignore`,
+ * where the decision is written down rather than guessed from the extension.
  *
  * **Only the conditions this package actually declares are probed.** An
  * ESM-only package has no `require` branch, and reporting one missing would be
@@ -102,7 +123,10 @@ export interface UnresolvableTypesOptions {
  * an empty array that reads as "its types resolve". A package without `exports`
  * is not probed through `types` and `main` instead: without a map every file
  * in it is importable, so the root alone would be one sample of an open set —
- * the reason a wildcard is not probed either.
+ * the reason a wildcard is not probed either. Nor does `ignore` turn a run in
+ * which nothing resolved into a pass: when every subpath that was probed is
+ * listed there and none of them resolved, that is said too, since excusing a
+ * finding is not the same as having checked something.
  *
  * **`typescript` has to be installed.** It is an optional peer dependency of
  * ngtrue, needed by this function, by `unexportedTypes` and by
@@ -133,22 +157,28 @@ export async function unresolvableTypes(options: UnresolvableTypesOptions): Prom
         .map(target => target.subpath),
     ),
   ].sort();
+  const ignored = new Set(options.ignore ?? []);
+  const used = new Set<string>();
   const problems: string[] = [];
-  const specifiers: string[] = [];
+  const probed: { readonly subpath: string; readonly specifier: string }[] = [];
 
   for (const subpath of subpaths) {
     if (subpath === './package.json') continue;
     if (subpath.includes('*')) {
+      if (ignored.has(subpath)) {
+        used.add(subpath);
+        continue;
+      }
       problems.push(
         `exports["${subpath}"] is a wildcard and was not probed — one sample would say nothing ` +
-          'about the rest of the set. Check it by hand, or list the subpaths literally.',
+          'about the rest of the set. Check it by hand, list the subpaths literally, or acknowledge it in `ignore`.',
       );
       continue;
     }
-    specifiers.push(subpath === '.' ? name : `${name}/${subpath.slice(2)}`);
+    probed.push({ subpath, specifier: subpath === '.' ? name : `${name}/${subpath.slice(2)}` });
   }
 
-  if (specifiers.length === 0) {
+  if (probed.length === 0) {
     // Two sentences, because "cannot be imported" would be false for both: a
     // package with no `exports` is imported through `types` and `main`, and a
     // wildcard subpath is importable and merely unprobed.
@@ -157,32 +187,64 @@ export async function unresolvableTypes(options: UnresolvableTypesOptions): Prom
         ? `${name} has no \`exports\` map, and only the subpaths one declares are probed`
         : `no subpath of ${name} was probed: \`exports\` lists none that is not a wildcard, a stylesheet, ` +
           '`null` or ./package.json';
-    return [...problems, `${why}, so nothing was checked.`];
-  }
-
-  const probe = stageProbe(name, packageDir);
-  try {
-    for (const mode of modes) {
-      const compilerOptions = optionsFor(ts, mode);
-      for (const specifier of specifiers) {
-        const resolved = ts.resolveModuleName(specifier, probe.containingFile, compilerOptions, ts.sys).resolvedModule;
-        if (resolved === undefined) {
-          problems.push(`${specifier} does not resolve under ${mode}.`);
-          continue;
-        }
-        if (!resolved.resolvedFileName.endsWith('.d.ts') && !resolved.resolvedFileName.endsWith('.d.mts')) {
-          problems.push(
-            `${specifier} resolves under ${mode} to ${resolved.resolvedFileName}, which is not a declaration file — ` +
-              'a consumer importing it gets `any` and no error.',
-          );
+    problems.push(`${why}, so nothing was checked.`);
+  } else {
+    let resolvedAny = false;
+    const probe = stageProbe(name, packageDir);
+    try {
+      for (const mode of modes) {
+        const compilerOptions = optionsFor(ts, mode);
+        for (const { subpath, specifier } of probed) {
+          const finding = findingFor(ts, specifier, mode, probe.containingFile, compilerOptions);
+          if (finding === undefined) {
+            resolvedAny = true;
+          } else if (ignored.has(subpath)) {
+            used.add(subpath);
+          } else {
+            problems.push(finding);
+          }
         }
       }
+    } finally {
+      probe.dispose();
     }
-  } finally {
-    probe.dispose();
+
+    if (!resolvedAny && probed.every(entry => ignored.has(entry.subpath))) {
+      // Every line was excused, and what is left is still a run in which no
+      // subpath resolved to declarations. An empty array here would say the
+      // package's types resolve when none of them did.
+      problems.push(
+        `no subpath of ${name} resolved to declarations, and every one that was probed is listed in \`ignore\`, ` +
+          'so nothing was checked.',
+      );
+    }
+  }
+
+  for (const entry of ignored) {
+    if (used.has(entry)) continue;
+    problems.push(
+      `ignore lists "${entry}", which is not a subpath this check would have reported — the entry exempts nothing.`,
+    );
   }
 
   return problems;
+}
+
+/** What a consumer importing `specifier` under `mode` would hit, or `undefined` when it reaches declarations. */
+function findingFor(
+  ts: TypeScript,
+  specifier: string,
+  mode: ResolutionMode,
+  containingFile: string,
+  compilerOptions: CompilerOptions,
+): string | undefined {
+  const resolved = ts.resolveModuleName(specifier, containingFile, compilerOptions, ts.sys).resolvedModule;
+  if (resolved === undefined) return `${specifier} does not resolve under ${mode}.`;
+  if (resolved.resolvedFileName.endsWith('.d.ts') || resolved.resolvedFileName.endsWith('.d.mts')) return undefined;
+  return (
+    `${specifier} resolves under ${mode} to ${resolved.resolvedFileName}, which is not a declaration file — ` +
+    'a consumer importing it gets `any` and no error.'
+  );
 }
 
 function optionsFor(ts: TypeScript, mode: ResolutionMode): CompilerOptions {

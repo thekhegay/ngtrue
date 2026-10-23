@@ -52,6 +52,27 @@ package appears to work right up until something that should not have compiled
 ships. The two are distinguished in the message because they have different
 fixes.
 
+## Exempting a decision
+
+Some subpaths are not for TypeScript and are kept that way on purpose. List
+them, spelled as they are in `exports`:
+
+```ts
+await unresolvableTypes({ packageDir: 'dist', ignore: ['./i18n/*.json', './schematics/*'] });
+```
+
+A wildcard listed there is acknowledged as unprobed. A literal subpath is still
+probed under every mode, and what it reports is excused — a bare string naming a
+`.css` file, say, that no TypeScript import is meant to resolve.
+
+An entry that exempts nothing is reported, so the list cannot outlive what it
+excused: a subpath whose types resolve, one skipped as a stylesheet, one the
+manifest no longer has.
+
+Excusing a finding is not checking something. When every subpath that was
+probed is listed and none of them resolved, the run says nothing was checked,
+because an empty array would claim that the package's types resolve.
+
 ## What it does not check
 
 **Wildcard subpaths are skipped, and the skip is reported.** Each stands for an
@@ -84,8 +105,9 @@ The skip goes by condition, not by file extension. A subpath with any other
 target is probed like the rest, so `{ "sass": "./_theme.scss", "default":
 "./theme.js" }` with no `types` is reported under both modes — a TypeScript
 import lands on that `.js`. So is a bare string pointing at a `.css` file, which
-offers the file to every condition, TypeScript's included. A subpath blocked
-with `null` is not probed: blocking it is the point.
+offers the file to every condition, TypeScript's included; if that shape is
+deliberate, `ignore` is where to say so. A subpath blocked with `null` is not
+probed: blocking it is the point.
 
 What the skip cannot tell is intent. A subpath meant for TypeScript as well —
 `{ "sass": …, "types": …, "default": … }` — that loses its `types` and
