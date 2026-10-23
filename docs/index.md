@@ -15,6 +15,7 @@ questions you only have when other people install your code:
 - Does the manifest describe the files the build actually produced?
 - Will the types resolve for a consumer whose `tsconfig.json` is not yours?
 - Will `ng add` and `ng update` load the schematics you ship?
+- Can a test runner or a server import every entry point you ship?
 
 Anything an application developer would reach for belongs somewhere else. There
 are already good answers to most of those, and none of them know what an entry
@@ -34,6 +35,7 @@ import {
   globalAttributeInputs,
   peerDependencyMismatches,
   unexportedTypes,
+  unloadableEntryPoints,
   unloadableSchematics,
   unresolvableTypes,
   unresolvedExports,
@@ -50,6 +52,7 @@ import {
 | [`unexportedTypes`](/guide/unexported-types)                     | `ngtrue/node`    | Can a consumer import every type a public signature names?   |
 | [`peerDependencyMismatches`](/guide/peer-dependency-mismatches)  | `ngtrue/node`    | Does the manifest match what the source imports, both ways?  |
 | [`unloadableSchematics`](/guide/unloadable-schematics)           | `ngtrue/node`    | Can the CLI load every schematic and migration you ship?     |
+| [`unloadableEntryPoints`](/guide/unloadable-entry-points)        | `ngtrue/node`    | Can a test runner or a server import every entry point?      |
 | [`globalAttributeInputs`](/guide/global-attribute-inputs)        | `ngtrue/node`    | Does a static `title` meant for an input land on the host?   |
 | [`angularPeerFloorsTooLow`](/guide/angular-peer-floors-too-low)  | `ngtrue/node`    | Can every Angular the peer range admits link the build?      |
 
@@ -71,6 +74,9 @@ parse a built package's compiled declarations rather than match their text. So
 is `@angular-devkit/schematics`, which `unloadableSchematics` uses to load
 schematics with the devkit's own engine, and so is `semver`, which
 `angularPeerFloorsTooLow` uses to read the lowest version a peer range admits.
+`unloadableEntryPoints` needs none of them: the `@angular/compiler` it loads
+before each entry point is the one the checked package resolves, which an
+Angular library's own install already has.
 
 ## What it will not do
 

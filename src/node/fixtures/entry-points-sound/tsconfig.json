@@ -1,0 +1,23 @@
+{
+  // A library build, in miniature: `ngc` in partial mode, the form every
+  // published Angular library ships. Compiled by `npm run fixtures` on every
+  // test run rather than committed, like `../declarations-sound`, and for a
+  // second reason here: a partial declaration evaluated without the linker
+  // falls back to the JIT compiler, so this build is what puts the check's
+  // loading of `@angular/compiler` under test.
+  "extends": "../../../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false
+  },
+  "include": ["src/**/*.ts"],
+  // The root config excludes every fixture, and `exclude` is inherited.
+  "exclude": [],
+  "angularCompilerOptions": {
+    "compilationMode": "partial",
+    "strictTemplates": true
+  }
+}

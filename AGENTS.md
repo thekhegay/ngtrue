@@ -149,10 +149,11 @@ in someone else's package.
 ### The two places the Angular compiler does run
 
 `tsconfig.fixtures.json`, over `src/testing/fixtures/controls.ts`, into
-`.fixtures/`; and each `src/node/fixtures/declarations-*/tsconfig.json`, in
-partial mode, into that package's own `dist/` — after the two dependencies
-they compile against, `src/node/fixtures/node_modules/@fixture/cdk/` and
-`@fixture/full/`, the second in full mode.
+`.fixtures/`; and each `src/node/fixtures/declarations-*/tsconfig.json` and
+`src/node/fixtures/entry-points-{sound,broken}/tsconfig.json`, in partial mode,
+into that package's own `dist/` — the declaration fixtures after the two
+dependencies they compile against, `src/node/fixtures/node_modules/@fixture/cdk/`
+and `@fixture/full/`, the second in full mode.
 
 It has to. Angular's JIT compiler cannot see `input()`, `model()` or `output()`:
 they are initializer APIs, so the inputs and outputs they declare exist only
@@ -201,16 +202,28 @@ is checked. Beside it, `@fixture/full` is compiled in FULL mode, so a base
 class that is an Angular declaration with no partial declaration to read is
 reported rather than walked through as a plain one.
 
+**The entry-point fixtures are built in partial mode too, for a second
+reason.** The check they serve,
+`unloadableEntryPoints`, imports them unlinked, and an unlinked partial
+declaration falls back to the JIT compiler, so their build is what puts the
+check's loading of `@angular/compiler` under test. The constructor, query and
+host-directive faults in the broken one exist only in partial output: run
+through the linker, those entry points load. Every `entry-points-*` package
+carries its dependencies in a `node_modules/` of its own, which `.gitignore`
+lets through, because the check imports them for real.
+
 ## Fixtures are whole packages, not mocks
 
 The node checks read a manifest and a filesystem, so a stub of either would only
 prove the stub matched what the check expected. `src/node/fixtures/` holds real
 little packages — one correct, one wrong in a distinct way per finding, one with
-no `exports`, one with no `name`, and a sound, a broken and a headless Angular
-library built from source on every run. Each fault is one a real build
-produces: a file the build stopped emitting, a subpath with no `types`
-condition, a pattern matching nothing, an import nobody declared, a peer nobody
-imports, a `title` input whose host carries the attribute.
+no `exports`, one with no `name`, a sound, a broken and a headless Angular
+library, and a sound and a broken one for the entry-point check, all built from
+source on every run. Each fault is one a real build produces: a file the build
+stopped emitting, a subpath with no `types` condition, a pattern matching
+nothing, an import nobody declared, a peer nobody imports, a `title` input whose
+host carries the attribute, a class read before its declaration ran, a browser
+global read as the module loads.
 
 They are excluded from `tsconfig.json`, `tsconfig.build.json`, eslint and the
 vitest run, each for its own reason and each with the reason written at the

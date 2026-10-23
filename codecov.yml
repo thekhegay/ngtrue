@@ -33,7 +33,9 @@ comment:
 # report carries only those files, so a second list here could only drift.
 #
 # The number cannot see code that runs in another process: v8 coverage is taken
-# from the test worker. Today the only child process is `npm pack --dry-run` in
-# `unloadableSchematics`, which is npm's code, not ours. A check that ran its own
-# code in a fresh Node process would show those lines uncovered however well its
-# fixtures exercise them.
+# from the test worker. Two checks start one. `unloadableSchematics` runs
+# `npm pack --dry-run`, which is npm's code, not ours. `unloadableEntryPoints`
+# runs its probe in a fresh `node` per entry point, and the probe is a string
+# constant, so its lines count as covered when the module loads whatever the
+# probe then does. The percentage says nothing about either; what covers them is
+# the fixtures that make each check fail for a named reason.

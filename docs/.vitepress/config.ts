@@ -51,6 +51,7 @@ export default defineConfig({
           { text: 'unexportedTypes', link: '/guide/unexported-types' },
           { text: 'peerDependencyMismatches', link: '/guide/peer-dependency-mismatches' },
           { text: 'unloadableSchematics', link: '/guide/unloadable-schematics' },
+          { text: 'unloadableEntryPoints', link: '/guide/unloadable-entry-points' },
           { text: 'globalAttributeInputs', link: '/guide/global-attribute-inputs' },
           { text: 'angularPeerFloorsTooLow', link: '/guide/angular-peer-floors-too-low' },
         ],

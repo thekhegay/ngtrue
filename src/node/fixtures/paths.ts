@@ -44,4 +44,9 @@ export const FIXTURES = {
   angularFull: `${here}/angular-full`,
   angularUnreadable: `${here}/angular-unreadable`,
   angularUnbuilt: `${here}/angular-unbuilt`,
+  entryPointsSound: `${here}/entry-points-sound`,
+  entryPointsBroken: `${here}/entry-points-broken`,
+  entryPointsUnlinked: `${here}/entry-points-unlinked`,
+  entryPointsLocalized: `${here}/entry-points-localized`,
+  entryPointsUnsettled: `${here}/entry-points-unsettled`,
 } as const;

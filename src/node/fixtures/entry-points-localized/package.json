@@ -1,0 +1,12 @@
+{
+  "name": "fixture-entry-points-localized",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "fixture-localize": "^1.0.0"
+  }
+}

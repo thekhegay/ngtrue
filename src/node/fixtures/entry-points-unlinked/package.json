@@ -1,0 +1,19 @@
+{
+  "name": "fixture-entry-points-unlinked",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./phone": "./phone.js",
+    "./upgrade": "./upgrade.js",
+    "./locales/*": "./locales/*.js",
+    "./theme": {
+      "sass": "./_theme.scss"
+    },
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "fixture-cjs": "^1.0.0",
+    "fixture-json": "^1.0.0"
+  }
+}
