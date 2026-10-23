@@ -4,7 +4,7 @@
 
 > **unexportedTypes**(`options`): `Promise`\<readonly `string`[]\>
 
-Defined in: [src/node/unexported-types.ts:199](https://github.com/thekhegay/ngtrue/blob/main/src/node/unexported-types.ts#L199)
+Defined in: [src/node/unexported-types.ts:200](https://github.com/thekhegay/ngtrue/blob/main/src/node/unexported-types.ts#L200)
 
 Every public member whose type names a declaration that no subpath of the
 package exports, as one sentence each. An empty array is a pass.
@@ -149,9 +149,10 @@ under `node16`, is `unresolvableTypes`'s question; a subpath that does not
 load here is reported rather than read, because its exports going uncounted
 would turn into findings against every type it exports.
 
-Subpaths that are not code — a `sass` or `style` condition, a `.json` or
-`.scss` target — are left out without a word: no import of them can carry a
-type, so there is nothing to read or to count.
+Subpaths that are not code — a stylesheet condition (`sass`, `style`,
+`less`, `css`, `scss` or `stylus`, the set `unresolvableTypes` skips too), a
+`.json` or `.scss` target — are left out without a word: no import of them
+can carry a type, so there is nothing to read or to count.
 
 A run that read nothing says so rather than returning an empty array: a
 package whose every subpath is a stylesheet, a wildcard or a file that does

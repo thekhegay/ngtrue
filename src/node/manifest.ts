@@ -98,6 +98,27 @@ export function exportTargets(manifest: Manifest): readonly ExportTarget[] {
   return found;
 }
 
+/**
+ * The `exports` conditions a stylesheet is resolved through and TypeScript
+ * never is. `sass` and `style` are what Sass's own `pkg:` importer reads;
+ * `style`, `sass` and `less` are what the Angular CLI's stylesheet bundler
+ * passes (`@angular/build`, `bundle-options.js`); `css`, `scss` and `stylus`
+ * are how published manifests spell the same thing — angular-split ships
+ * `"./theme": { "css": "./theme.css" }`.
+ *
+ * One set for every check here, because two checks reading the same manifest
+ * must agree about which of its subpaths are stylesheets. They did not:
+ * `unresolvableTypes` kept `sass` and `style` while `unexportedTypes` kept all
+ * six, so on ng-zorro-antd 22.1.2 the first reported 69 `{ "less": … }`
+ * wildcards as unprobed that the second passed over without a word, and on
+ * angular-split 20.0.0 the first said twice that `./theme` does not resolve.
+ *
+ * It goes by condition and never by extension. A target outside these
+ * conditions is offered to TypeScript too, whatever file it names, and what a
+ * TypeScript import of it gets is a question a check may still ask.
+ */
+export const STYLESHEET_CONDITIONS: ReadonlySet<string> = new Set(['sass', 'style', 'less', 'css', 'scss', 'stylus']);
+
 /** `{ "a": "^1" }` read defensively, because it is someone else's manifest. */
 export function dependencyRecord(value: unknown): Readonly<Record<string, string>> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return {};

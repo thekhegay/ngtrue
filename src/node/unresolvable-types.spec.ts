@@ -3,6 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { FIXTURES } from './fixtures/paths.js';
 import { unresolvableTypes } from './unresolvable-types.js';
 
+const wildcard = (subpath: string) =>
+  `exports["${subpath}"] is a wildcard and was not probed — one sample would say nothing about the rest of ` +
+  'the set. Check it by hand, or list the subpaths literally.';
+
 describe('unresolvableTypes', () => {
   it('finds nothing wrong with a package whose types resolve both ways', async () => {
     expect(await unresolvableTypes({ packageDir: FIXTURES.sound })).toEqual([]);
@@ -36,7 +40,7 @@ describe('unresolvableTypes', () => {
   });
 
   describe('subpaths only a stylesheet compiler can reach', () => {
-    it('does not probe them: TypeScript matches neither `sass` nor `style`', async () => {
+    it('does not probe them: TypeScript matches none of the stylesheet conditions', async () => {
       // `stylesheets/` exports `.` under `sass` alone. Probed, it would come back
       // as "does not resolve" under both modes — the ten lines ngwr got for its
       // Sass entry points and the twelve `@angular/cdk` got for its prebuilt CSS.
@@ -65,6 +69,35 @@ describe('unresolvableTypes', () => {
       expect(theme.some(problem => problem.includes('under node16'))).toBe(true);
       expect(theme.some(problem => problem.includes('under bundler'))).toBe(true);
     });
+
+    it('skips `less` and `css` like the rest, which a real package needed', async () => {
+      // `stylesheets-sound/` has ng-zorro-antd's two shapes — `"./*.less"` under
+      // `less` alone, and a per-component wildcard under `less` and `style` —
+      // and angular-split's `"./theme": { "css": … }`, beside a typed root.
+      // Skipping only `sass` and `style` turned them into two wildcard notes and
+      // two lines saying `./theme` does not resolve; on the packages themselves
+      // that was every one of ng-zorro-antd's 69 lines and both of
+      // angular-split's.
+      expect(await unresolvableTypes({ packageDir: FIXTURES.stylesheetsSound })).toEqual([]);
+    });
+
+    it('probes the same subpaths again once they offer TypeScript a JavaScript target', async () => {
+      // `stylesheets-broken/` is the sound package with a `default` beside the
+      // stylesheet in `./button/style/*` and in `./theme`. The `less`-only
+      // wildcard stays silent; the other two are where a TypeScript import now
+      // lands, so the wildcard is unprobed again and `./theme` gets `any`.
+      const problems = await unresolvableTypes({ packageDir: FIXTURES.stylesheetsBroken });
+
+      expect(problems).toEqual([
+        wildcard('./button/style/*'),
+        expect.stringMatching(
+          /^fixture-stylesheets-broken\/theme resolves under node16 to .*theme\.js, which is not a/,
+        ),
+        expect.stringMatching(
+          /^fixture-stylesheets-broken\/theme resolves under bundler to .*theme\.js, which is not a/,
+        ),
+      ]);
+    });
   });
 
   it('reports a package with no `exports` as unprobed rather than passing it', async () => {
@@ -78,10 +111,7 @@ describe('unresolvableTypes', () => {
   it('reports a wildcard subpath as unchecked rather than passing it', async () => {
     const problems = await unresolvableTypes({ packageDir: FIXTURES.broken, modes: ['bundler'] });
 
-    expect(problems).toContain(
-      'exports["./locales/*"] is a wildcard and was not probed — one sample would say nothing ' +
-        'about the rest of the set. Check it by hand, or list the subpaths literally.',
-    );
+    expect(problems).toContain(wildcard('./locales/*'));
   });
 
   it('probes only the modes it is asked for', async () => {

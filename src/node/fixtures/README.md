@@ -15,6 +15,11 @@ only that order shows both; and its schematics subtree imports a package the
 Angular CLI supplies, which is a finding until `exclude` says the subtree runs
 somewhere else. `stylesheets/` is a package only a Sass compiler can import,
 which `unresolvableTypes` has to report as unprobed rather than pass.
+`stylesheets-sound/` holds the stylesheet subpaths that two real packages got
+reported for — ng-zorro-antd's `less` wildcards and angular-split's `css` theme
+— beside a typed root, and `stylesheets-broken/` is the same package with a
+`default` JavaScript target added to two of them, so a TypeScript import lands
+there and both type checks have to name those two and only those.
 
 The `schematics-*` packages are for `unloadableSchematics`, and they are
 measured the way a consumer meets them: packed by `npm pack --dry-run`, copied

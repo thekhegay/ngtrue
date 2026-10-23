@@ -1,0 +1,22 @@
+{
+  "name": "fixture-stylesheets-sound",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./*.less": {
+      "less": "./*.less"
+    },
+    "./button/style/*": {
+      "less": "./button/style/*.less",
+      "style": "./button/style/index.css"
+    },
+    "./theme": {
+      "css": "./theme.css"
+    },
+    "./package.json": "./package.json"
+  }
+}

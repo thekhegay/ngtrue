@@ -59,17 +59,26 @@ open set and a single sample would say nothing about the rest. It appears in the
 returned array so it cannot be mistaken for a pass.
 
 **A subpath only a stylesheet compiler can reach is skipped, silently.** When
-every target sits under a `sass` or `style` condition, TypeScript matches none
-of them and there is no types question to ask:
+every target sits under a stylesheet condition — `sass`, `style`, `less`, `css`,
+`scss` or `stylus` — TypeScript matches none of them and there is no types
+question to ask:
 
 ```json
 {
   "exports": {
     "./theme": { "sass": "./theme/_index.scss" },
-    "./overlay-prebuilt.css": { "style": "./overlay-prebuilt.css" }
+    "./overlay-prebuilt.css": { "style": "./overlay-prebuilt.css" },
+    "./*.less": { "less": "./*.less" },
+    "./split.css": { "css": "./split.css" }
   }
 }
 ```
+
+It is the same set [`unexportedTypes`](/guide/unexported-types) leaves out, so
+the two checks agree about which subpaths are stylesheets. They did not always:
+with only `sass` and `style` skipped here, ng-zorro-antd's `less` wildcards
+were reported as unprobed and angular-split's `css` theme as unresolvable,
+while `unexportedTypes` passed over both.
 
 The skip goes by condition, not by file extension. A subpath with any other
 target is probed like the rest, so `{ "sass": "./_theme.scss", "default":

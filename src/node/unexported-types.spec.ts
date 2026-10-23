@@ -194,6 +194,23 @@ describe('unexportedTypes', () => {
         'fixture-unexported-wildcard: setLocale names Locale, which no subpath exports.',
       ]);
     });
+
+    it('leaves out the stylesheet subpaths `unresolvableTypes` skips, and only those', async () => {
+      // The pair `unresolvableTypes` is held to, read here, so the two checks
+      // are seen to agree: each names `./button/style/*` and `./theme` once a
+      // `default` offers TypeScript a target in them, and neither names
+      // `./*.less`, which offers none. This holds the agreement and not the
+      // shared set: every stylesheet target here also ends in a stylesheet
+      // extension, which this check leaves out on its own, so it passed before
+      // the set was shared. `unresolvableTypes` goes by condition alone, and
+      // its spec on the same pair is what fails without `less` and `css`.
+      expect(await unexportedTypes({ packageDir: FIXTURES.stylesheetsSound })).toEqual([]);
+      expect(await unexportedTypes({ packageDir: FIXTURES.stylesheetsBroken })).toEqual([
+        expect.stringContaining('exports["./button/style/*"] is a wildcard'),
+        'fixture-stylesheets-broken/theme did not load as declarations under bundler, so nothing it exports ' +
+          'was counted or read. `unresolvableTypes` says why.',
+      ]);
+    });
   });
 
   describe('ignore', () => {
