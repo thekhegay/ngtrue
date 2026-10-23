@@ -51,5 +51,17 @@ export default defineConfig({
     // suite. Collected, it fails the run with "no test suite found".
     exclude: ['**/node_modules/**', 'src/**/fixtures/**'],
     setupFiles: ['src/testing/fixtures/test-setup.ts'],
+    // What `npm run test:coverage` measures: the files `tsconfig.build.json`
+    // compiles, which is to say what ships. Specs and fixtures never reach a
+    // consumer, and `.fixtures/` is compiled output outside `src/`. This is the
+    // only list — `codecov.yml` keeps no ignore list of its own to drift from
+    // it — and a shipped file no spec loads still counts, at zero, rather than
+    // dropping out of the total.
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.ts'],
+      exclude: ['src/**/*.spec.ts', 'src/**/fixtures/**'],
+      reporter: ['text-summary', 'lcovonly'],
+    },
   },
 });

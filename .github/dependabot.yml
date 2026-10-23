@@ -39,6 +39,13 @@ updates:
           - 'vitepress'
           - 'typedoc'
           - 'typedoc-*'
+      # `@vitest/coverage-v8` takes exactly its own version of `vitest` as a
+      # peer, and `vitest` takes it back the same way. A bump of one alone
+      # cannot resolve, so they move together or not at all.
+      vitest:
+        patterns:
+          - 'vitest'
+          - '@vitest/*'
       types:
         patterns:
           - '@types/*'

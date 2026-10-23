@@ -5,6 +5,7 @@ Checks that keep an Angular library true.
 [![ngtrue docs](https://img.shields.io/badge/ngtrue.khegay.dev-3451b2)](https://ngtrue.khegay.dev)
 [![npm version](https://img.shields.io/npm/v/ngtrue?color=e21a62)](https://www.npmjs.com/package/ngtrue)
 [![ci](https://img.shields.io/github/actions/workflow/status/thekhegay/ngtrue/ci.yml?branch=main&label=ci)](https://github.com/thekhegay/ngtrue/actions/workflows/ci.yml)
+[![coverage](https://codecov.io/gh/thekhegay/ngtrue/branch/main/graph/badge.svg)](https://codecov.io/gh/thekhegay/ngtrue)
 [![node](https://img.shields.io/node/v/ngtrue)](https://www.npmjs.com/package/ngtrue)
 [![license](https://img.shields.io/npm/l/ngtrue)](https://github.com/thekhegay/ngtrue/blob/main/LICENSE)
 

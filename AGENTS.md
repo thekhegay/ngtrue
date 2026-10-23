@@ -107,6 +107,7 @@ finding to a boolean.
 | Build         | `npm run build` (`tsc`, nothing else)                               |
 | Typecheck     | `npm run typecheck`                                                 |
 | Test          | `npm test` (builds and compiles fixtures first, via `pretest`)      |
+| Coverage      | `npm run test:coverage` (what CI runs, for Codecov)                 |
 | Lint          | `npm run lint` (eslint, then prettier `--check`)                    |
 | Format        | `npm run format`                                                    |
 | API reference | `npm run docs:api` writes it; `npm run docs:check` fails when stale |
@@ -117,6 +118,13 @@ packaging checks against ngtrue's own built package. `pretest` builds it.
 That spec throws rather than skipping when `dist/` is absent — a suite that
 quietly passed with nothing to look at would be green on exactly the runs that
 matter.
+
+`test:watch` and `test:coverage` each carry their own copy of that hook, because
+npm runs `pre<name>` for the exact name and no other: `test:coverage` without
+`pretest:coverage` starts on a clean checkout with no `dist/` and no compiled
+fixtures. Both Codecov statuses are informational — the number is a pointer for
+a reader, never a gate — and `vitest.config.ts` is the one list of what it
+measures.
 
 **Versions live in `package.json` and nowhere else.** No range is restated in
 this file, in the README or in the docs. A copy stays correct until somebody
