@@ -1,0 +1,18 @@
+{
+  // A library build like `../declarations-sound`; see the note there.
+  "extends": "../../../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false
+  },
+  "include": ["src/**/*.ts"],
+  // The root config excludes every fixture, and `exclude` is inherited.
+  "exclude": [],
+  "angularCompilerOptions": {
+    "compilationMode": "partial",
+    "strictTemplates": true
+  }
+}

@@ -7,6 +7,7 @@
     "declaration": false,
     "declarationMap": false,
     "sourceMap": false,
+    "experimentalDecorators": false,
     // A scoped name this time, so the check's self-reference has to keep the
     // scope when it maps a specifier onto `exports`.
     "paths": { "@fixture/declarations-broken/core": ["./src/core/index.ts"] }

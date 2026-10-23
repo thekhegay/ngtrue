@@ -1,0 +1,12 @@
+{
+  "name": "fixture-declarations-headless",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "@angular/core": "^22.0.0"
+  }
+}

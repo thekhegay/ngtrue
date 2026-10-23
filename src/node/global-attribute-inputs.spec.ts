@@ -14,7 +14,7 @@ describe('globalAttributeInputs', () => {
     // An empty array from a reader that missed half the package would pass the
     // next test for the wrong reason. The sound package spreads its classes over
     // a second entry point reached by the package's own name and a module
-    // reached by an extensionless relative import, so all nine being here is
+    // reached by an extensionless relative import, so all ten being here is
     // what makes the pass below mean anything.
     const dir = FIXTURES.declarationsSound;
     const names = new PartialDeclarationReader(ts, dir, readManifest(dir))
@@ -29,10 +29,25 @@ describe('globalAttributeInputs', () => {
       'FixtureIcon',
       'FixtureLabelled',
       'FixturePanel',
+      'FixtureSwitch',
       'FixtureTip',
       'FixtureTipped',
       'FixtureTitled',
     ]);
+  });
+
+  it('meets FixtureSwitch in the wrapper standard decorators compile to, so following its base is tested', () => {
+    // Were TypeScript to emit decorators natively one day, the class would
+    // extend FixtureLabelled directly and the pass below would hold without
+    // the lookup it exists for.
+    const dir = FIXTURES.declarationsSound;
+    const reader = new PartialDeclarationReader(ts, dir, readManifest(dir));
+    const node = reader
+      .read()
+      .flatMap(module => module.declarations)
+      .find(declaration => declaration.className === 'FixtureSwitch')?.classNode;
+
+    expect(node && reader.baseOf(node)?.getText()).toBe('_classSuper');
   });
 
   it('finds nothing wrong with a package whose global-attribute inputs never reach a host', async () => {
@@ -69,6 +84,11 @@ describe('globalAttributeInputs', () => {
     it('follows a base class across entry points and through a plain class between', () => {
       expect(about('FixtureRadio')).toHaveLength(1);
       expect(about('FixtureRadio')[0]).toContain('has an input "id" inherited from FixtureControl');
+    });
+
+    it('follows a base held in the local a standard-decorated class is wrapped with', () => {
+      expect(about('FixtureToggle')).toHaveLength(1);
+      expect(about('FixtureToggle')[0]).toContain('has an input "id" inherited from FixtureControl');
     });
 
     it('finds an input a host directive exposes, under the alias the host gives it', () => {
@@ -156,6 +176,7 @@ describe('globalAttributeInputs', () => {
         'FixtureStyled',
         'FixtureStyled',
         'FixtureTab',
+        'FixtureToggle',
       ]);
     });
   });
@@ -218,6 +239,20 @@ describe('globalAttributeInputs', () => {
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain('found 0 partial declaration(s)');
     expect(problems[0]).toContain('nothing was checked');
+    expect(problems[0]).toContain('compiled in full mode');
+  });
+
+  it('reports a partial package with nothing on a custom element without blaming full mode', async () => {
+    // A headless directive library is built the right way and has nothing in
+    // scope. Saying it was compiled in full mode would be false, and would send
+    // its author after a build problem that is not there.
+    expect(await globalAttributeInputs({ packageDir: FIXTURES.declarationsHeadless })).toEqual([
+      'read 1 JavaScript file(s) reachable from `exports` and found 3 partial declaration(s), none of them on a ' +
+        'custom element — so nothing was checked. A selector that names no custom element (here `[fixtureHint]`) ' +
+        'puts a declaration on an element the consumer chose, where the native attribute may be exactly what they ' +
+        'want, and a declaration with no selector is never a host at all; this check skips both, so a package made ' +
+        'only of them has nothing for it to read.',
+    ]);
   });
 
   it('says so when a package has no `exports` to start from', async () => {

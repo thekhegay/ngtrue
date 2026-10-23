@@ -4,7 +4,7 @@
 
 > **globalAttributeInputs**(`options`): `Promise`\<readonly `string`[]\>
 
-Defined in: [src/node/global-attribute-inputs.ts:233](https://github.com/thekhegay/ngtrue/blob/main/src/node/global-attribute-inputs.ts#L233)
+Defined in: [src/node/global-attribute-inputs.ts:243](https://github.com/thekhegay/ngtrue/blob/main/src/node/global-attribute-inputs.ts#L243)
 
 Every input whose public name is an HTML global attribute with a visible
 effect, on a component whose host has no binding for that attribute — as one
@@ -59,6 +59,12 @@ surface is merged the way Angular merges it at runtime:
 - everything a base class contributes — inputs, host bindings, host
   directives — when the base is in this package, followed through its own
   `extends` in turn, across files and across entry points.
+
+A base TypeScript holds in a local is followed through it. A class with a
+member that carries a standard (TC39) decorator is emitted inside a function,
+as `let _classSuper = NzTreeBase; … return class … extends _classSuper` —
+ng-zorro-antd builds that way — and the name is looked up in the blocks
+around the class before the module scope, as the engine looks it up.
 
 Names are compared lowercased. An input called `tabIndex`, written statically
 as `tabIndex="0"`, sets the input and lands on the element as `tabindex`,
@@ -156,7 +162,11 @@ directive the reader cannot follow to a declaration is reported the same way.
 
 **Full compilation.** An application build emits `ɵɵdefineComponent`, which
 this does not read. A package with no partial declaration on a custom element
-gets one finding saying nothing was checked, rather than an empty array.
+gets one finding saying nothing was checked, rather than an empty array, and
+the finding names the reason: no partial declaration at all, which is full
+mode or the wrong directory, or declarations that all sit on an attribute, a
+native element or no selector — a headless directive library, which is in
+the right form and simply has nothing in scope.
 
 **Two classes with one name** share a finding and an `ignore` entry. A package
 that ships the same class in two builds — an `esm2022` and a `fesm2022` copy

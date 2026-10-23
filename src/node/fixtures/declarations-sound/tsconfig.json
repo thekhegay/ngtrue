@@ -12,6 +12,13 @@
     "declaration": false,
     "declarationMap": false,
     "sourceMap": false,
+    // Standard decorators, as ng-zorro-antd builds with. TypeScript wraps a
+    // class with a member that carries one in a function and keeps its base in
+    // a `_classSuper` local there, which the check has to follow. No other
+    // class here changes: the compiler removes Angular's own decorators before
+    // TypeScript sees them, so they compile byte for byte as they would under
+    // `experimentalDecorators`.
+    "experimentalDecorators": false,
     // The second entry point imports the first by the package's own name, the
     // way a FESM entry point imports a sibling. The emitted JavaScript keeps the
     // bare specifier, so the check has to resolve it through `exports`.

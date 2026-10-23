@@ -184,11 +184,11 @@ the difference. Their `dist/` is gitignored, unlike the hand-written packages'.
 The node checks read a manifest and a filesystem, so a stub of either would only
 prove the stub matched what the check expected. `src/node/fixtures/` holds real
 little packages — one correct, one wrong in a distinct way per finding, one with
-no `exports`, one with no `name`, and a sound and a broken Angular library built
-from source on every run. Each fault is one a real build produces: a file the
-build stopped emitting, a subpath with no `types` condition, a pattern matching
-nothing, an import nobody declared, a peer nobody imports, a `title` input whose
-host carries the attribute.
+no `exports`, one with no `name`, and a sound, a broken and a headless Angular
+library built from source on every run. Each fault is one a real build
+produces: a file the build stopped emitting, a subpath with no `types`
+condition, a pattern matching nothing, an import nobody declared, a peer nobody
+imports, a `title` input whose host carries the attribute.
 
 They are excluded from `tsconfig.json`, `tsconfig.build.json`, eslint and the
 vitest run, each for its own reason and each with the reason written at the

@@ -27,6 +27,18 @@ export class FixturePanel {
 @Component({ selector: 'fixture-checkbox', template: '<input type="checkbox" [id]="id()" />' })
 export class FixtureCheckbox extends FixtureLabelled {}
 
+/** A field decorator in the standard form, the kind ng-zorro-antd's `@WithConfig()` is. It does nothing. */
+function configurable(_value: undefined, _context: ClassFieldDecoratorContext): void {}
+
+/**
+ * Inherits `id` from the same base as FixtureCheckbox, but a decorated field
+ * makes TypeScript wrap the class in a function and hold the base in a local.
+ */
+@Component({ selector: 'fixture-switch', template: '<input type="checkbox" role="switch" [id]="id()" />' })
+export class FixtureSwitch extends FixtureLabelled {
+  @configurable size = 'medium';
+}
+
 /** Exposes a host directive's input as `title`; the host directive binds the attribute away. */
 @Component({
   selector: 'fixture-tip',
