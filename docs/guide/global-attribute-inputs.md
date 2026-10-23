@@ -17,7 +17,9 @@ it('keeps a static title off the host', async () => {
 ```
 
 Point it at the **built** package. It reads the JavaScript the package ships,
-so a source tree has nothing for it to read.
+so a source tree has nothing for it to read. Run it where the package's
+dependencies are installed — a `dist/` inside the repository that built it is —
+because a base class or a host directive from one of them is read from there.
 
 ## The defect
 
@@ -62,10 +64,18 @@ following relative imports from there.
 A component's inputs are merged the way Angular merges them at runtime: its own,
 the ones its `hostDirectives` expose under the alias the host gives them, the
 ones those directives expose from host directives of their own — Angular puts
-those on the same element — and everything a base class in the same package
-contributes, followed through the whole `extends` chain and across entry
-points. Host bindings are merged the same way, so a base class or a host
-directive that binds the attribute away counts.
+those on the same element — and everything a base class contributes, followed
+through the whole `extends` chain, across entry points and across packages.
+Host bindings are merged the same way, so a base class or a host directive that
+binds the attribute away counts.
+
+A base class or a host directive from another package is read from that package
+as installed, found in the `node_modules` directories above yours the way Node
+finds it. Material's components extend CDK classes with inputs and host bindings
+of their own, and a sortable item that carries `CdkDrag` is only checked once
+`@angular/cdk` is read. A finding that runs through such a class names the
+package and the version that was read: `has an input "title" inherited from
+SomeBase (some-package 3.1.0)`.
 
 A base TypeScript keeps in a local is followed through it. A class with a
 member that carries a standard decorator is emitted inside a function, as
@@ -105,21 +115,26 @@ await globalAttributeInputs({
 to stay, or removes it in code where no declaration shows it.
 
 A bare class name accepts that the class could not be checked completely,
-because it extends a class from another package or carries a host directive
-from one. It does not silence that class's input findings.
+because it extends a class or carries a host directive from a package that is
+not installed, or one the check cannot follow. It does not silence that class's
+input findings.
 
 An `ignore` entry that matches nothing is reported, so the list cannot outlive
 the code it excuses.
 
 ## What it reports instead of passing
 
-- **A base class from another package.** Its inputs become the subclass's own
-  and cannot be read from here, so the class is named as not fully checked. The
-  same goes for a base it cannot follow to a class, such as a mixin call.
-- **A host directive from another package.** Angular applies that directive's
-  own host directives to your host too, under names only its package declares,
-  so the class is named as not fully checked. The names your host exposes from
-  it are still checked.
+- **A base class from a package that is not installed.** Its inputs become the
+  subclass's own, and with no `node_modules` holding the package there is
+  nothing to read them from, so the class is named as not fully checked. The
+  same goes for a base it cannot follow to a class, such as a mixin call, here
+  or in an installed package, and for a base an installed package ships
+  compiled in full mode, whose definition is code rather than a declaration to
+  read.
+- **A host directive from a package that is not installed.** Angular applies
+  that directive's own host directives to your host too, under names only its
+  package declares, so the class is named as not fully checked. The names your
+  host exposes from it are still checked.
 - **A package with nothing on a custom element.** One finding says nothing was
   checked, and why. With no partial declarations at all, the package was
   compiled in full mode or the path is the wrong directory. With declarations
@@ -141,10 +156,16 @@ such as `[wrTooltip]` or `button[wr-btn]`, puts the declaration on an element
 the consumer chose, where the native attribute may be exactly what they want.
 Those are skipped.
 
-**The host bindings of a host directive from another package.** The names your
-host exposes from it are in your own declaration and are checked, but its
-bindings are not readable, so such a finding may describe an attribute that
-directive already removes. The message says so.
+**The host bindings of a host directive from a package that is not
+installed.** The names your host exposes from it are in your own declaration and
+are checked, but its bindings are not readable, so such a finding may describe
+an attribute that directive already removes. The message says so.
+
+**Every version a range admits.** A dependency is read as it is installed where
+the check runs. A peer range such as `^22.0.0` admits releases that were not
+read, and one in which a base gains a global-attribute input or drops a host
+binding changes the answer without a change in your package. The version in the
+finding is the one the answer is about; run the check again when it moves.
 
 **`typescript` must be installed.** It is an optional peer of ngtrue, needed by
 this export, by [`unresolvableTypes`](/guide/unresolvable-types) and by

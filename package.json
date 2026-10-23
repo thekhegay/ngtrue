@@ -44,7 +44,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "fixtures": "ngc -p tsconfig.fixtures.json && ngc -p src/node/fixtures/declarations-sound/tsconfig.json && ngc -p src/node/fixtures/declarations-broken/tsconfig.json && ngc -p src/node/fixtures/declarations-headless/tsconfig.json",
+    "fixtures": "ngc -p tsconfig.fixtures.json && ngc -p src/node/fixtures/node_modules/@fixture/cdk/tsconfig.json && ngc -p src/node/fixtures/node_modules/@fixture/full/tsconfig.json && ngc -p src/node/fixtures/declarations-sound/tsconfig.json && ngc -p src/node/fixtures/declarations-broken/tsconfig.json && ngc -p src/node/fixtures/declarations-headless/tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

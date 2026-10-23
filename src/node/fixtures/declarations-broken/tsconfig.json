@@ -8,9 +8,17 @@
     "declarationMap": false,
     "sourceMap": false,
     "experimentalDecorators": false,
-    // A scoped name this time, so the check's self-reference has to keep the
-    // scope when it maps a specifier onto `exports`.
-    "paths": { "@fixture/declarations-broken/core": ["./src/core/index.ts"] }
+    "paths": {
+      // A scoped name this time, so the check's self-reference has to keep the
+      // scope when it maps a specifier onto `exports`.
+      "@fixture/declarations-broken/core": ["./src/core/index.ts"],
+      // `@fixture/cdk` under a name no `node_modules` above this package holds:
+      // the build compiles against its types, and the check, looking where
+      // Node would, finds nothing. That is a dependency not installed where
+      // the package is checked.
+      "@fixture/missing": ["../node_modules/@fixture/cdk/dist/index.d.ts"],
+      "@fixture/missing/scrolling": ["../node_modules/@fixture/cdk/dist/scrolling/index.d.ts"]
+    }
   },
   "include": ["src/**/*.ts"],
   // The root config excludes every fixture, and `exclude` is inherited.

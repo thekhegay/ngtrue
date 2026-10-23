@@ -142,7 +142,9 @@ in someone else's package.
 
 `tsconfig.fixtures.json`, over `src/testing/fixtures/controls.ts`, into
 `.fixtures/`; and each `src/node/fixtures/declarations-*/tsconfig.json`, in
-partial mode, into that package's own `dist/`.
+partial mode, into that package's own `dist/` — after the two dependencies
+they compile against, `src/node/fixtures/node_modules/@fixture/cdk/` and
+`@fixture/full/`, the second in full mode.
 
 It has to. Angular's JIT compiler cannot see `input()`, `model()` or `output()`:
 they are initializer APIs, so the inputs and outputs they declare exist only
@@ -178,6 +180,18 @@ Angular changed the format under it, the way signal inputs reshaped `inputs` in
 beside the author's `'./titled.js'`), which Node's ESM loader does not resolve
 and which the check has to follow anyway, because a bundled build never shows
 the difference. Their `dist/` is gitignored, unlike the hand-written packages'.
+
+**Their dependency lives in a real `node_modules`.** `globalAttributeInputs`
+reads a base class or a host directive from another package where Node would
+find it installed, so `@fixture/cdk` sits in `src/node/fixtures/node_modules/`,
+above the libraries that import it, and `.gitignore` carves that one directory
+out of its `node_modules/` rule: its sources are committed and its `dist/` is
+built like theirs. The broken library also imports it under a second name,
+`@fixture/missing`, which a TypeScript path mapping resolves for the build and
+no `node_modules` holds — a dependency that is not installed where the package
+is checked. Beside it, `@fixture/full` is compiled in FULL mode, so a base
+class that is an Angular declaration with no partial declaration to read is
+reported rather than walked through as a plain one.
 
 ## Fixtures are whole packages, not mocks
 

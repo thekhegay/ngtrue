@@ -8,7 +8,9 @@
     "./package.json": "./package.json"
   },
   "peerDependencies": {
-    "@angular/common": "^22.0.0",
-    "@angular/core": "^22.0.0"
+    "@angular/core": "^22.0.0",
+    "@fixture/cdk": "^1.4.0",
+    "@fixture/full": "^2.0.0",
+    "@fixture/missing": "^1.4.0"
   }
 }

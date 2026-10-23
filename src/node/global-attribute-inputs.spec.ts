@@ -14,7 +14,7 @@ describe('globalAttributeInputs', () => {
     // An empty array from a reader that missed half the package would pass the
     // next test for the wrong reason. The sound package spreads its classes over
     // a second entry point reached by the package's own name and a module
-    // reached by an extensionless relative import, so all ten being here is
+    // reached by an extensionless relative import, so all twelve being here is
     // what makes the pass below mean anything.
     const dir = FIXTURES.declarationsSound;
     const names = new PartialDeclarationReader(ts, dir, readManifest(dir))
@@ -24,6 +24,7 @@ describe('globalAttributeInputs', () => {
 
     expect(names).toEqual([
       'FixtureButton',
+      'FixtureCaption',
       'FixtureCard',
       'FixtureCheckbox',
       'FixtureIcon',
@@ -33,6 +34,7 @@ describe('globalAttributeInputs', () => {
       'FixtureTip',
       'FixtureTipped',
       'FixtureTitled',
+      'FixtureViewport',
     ]);
   });
 
@@ -117,20 +119,39 @@ describe('globalAttributeInputs', () => {
       );
     });
 
-    it('reports a host directive from another package, whose own host directives cannot be read', () => {
-      expect(about('FixtureChip')).toEqual([
-        'FixtureChip (selector "fixture-chip", dist/index.js) was not fully checked: FixtureChip uses the host ' +
-          'directive NgClass from @angular/common, and any host directives of its own land on this host under ' +
-          'names only that package declares — those cannot be read from this one. Check its inputs by hand, then ' +
-          'add "FixtureChip" to ignore.',
+    it('reads an installed dependency for a base, and names the package and version the input came from', () => {
+      expect(about('FixtureHeadline')).toEqual([
+        'FixtureHeadline (selector "fixture-headline", dist/index.js) has an input "title" inherited from ' +
+          'FixtureCdkHeading (@fixture/cdk 1.4.0), and nothing binds [attr.title] on its host: a static title="…" ' +
+          "sets the input and stays on the host element, where it draws the browser's native tooltip over the " +
+          'whole host.',
       ]);
     });
 
-    it('still checks the alias a host gives a directive from another package, and says its bindings went unread', () => {
+    it('reads an installed host directive’s own host directives, under the names only that package declares', () => {
+      expect(about('FixtureHelp')).toHaveLength(1);
+      expect(about('FixtureHelp')[0]).toContain(
+        'has an input "title" exposed from the host directive FixtureCdkTooltip through the host directive ' +
+          'FixtureCdkHasTooltip (@fixture/cdk 1.4.0), and nothing binds [attr.title]',
+      );
+    });
+
+    it('reports a host directive from a package that is not installed, whose own host directives cannot be read', () => {
+      expect(about('FixtureChip')).toEqual([
+        'FixtureChip (selector "fixture-chip", dist/index.js) was not fully checked: FixtureChip uses the host ' +
+          'directive FixtureCdkScrollable from @fixture/missing/scrolling, and any host directives of its own land ' +
+          'on this host under names only that package declares — those cannot be read, because no node_modules ' +
+          'above this package holds @fixture/missing. Check its inputs by hand, then add "FixtureChip" to ignore.',
+      ]);
+    });
+
+    it('still checks the alias a host gives a directive it cannot read, and says its bindings went unread', () => {
       expect(about('FixtureBadge')).toHaveLength(2);
-      expect(about('FixtureBadge')[0]).toContain('was not fully checked: FixtureBadge uses the host directive NgClass');
+      expect(about('FixtureBadge')[0]).toContain(
+        'was not fully checked: FixtureBadge uses the host directive FixtureCdkTooltip from @fixture/missing,',
+      );
       expect(about('FixtureBadge')[1]).toContain(
-        'has an input "title" exposed from the host directive NgClass from @angular/common, ' +
+        'has an input "title" exposed from the host directive FixtureCdkTooltip from @fixture/missing, ' +
           'whose host bindings this check could not read',
       );
     });
@@ -140,16 +161,36 @@ describe('globalAttributeInputs', () => {
       expect(about('FixtureTab')[0]).toContain('has an input "title"');
     });
 
-    it('reports a base class from another package instead of passing it', () => {
+    it('reports a base class from a package that is not installed instead of passing it', () => {
       expect(about('FixtureStyled')).toContain(
         'FixtureStyled (selector "fixture-styled", dist/index.js) was not fully checked: FixtureStyled extends ' +
-          "NgStyle from @angular/common, and a base class's inputs become its subclass's own — those of a class " +
-          'in another package cannot be read from this one. Check its inputs by hand, then add "FixtureStyled" to ignore.',
+          "FixtureCdkScrollable from @fixture/missing/scrolling, and a base class's inputs become its subclass's " +
+          'own — those cannot be read, because no node_modules above this package holds @fixture/missing. Check ' +
+          'its inputs by hand, then add "FixtureStyled" to ignore.',
       );
     });
 
     it('still checks the inputs it can see on a class it cannot check completely', () => {
       expect(about('FixtureStyled').some(problem => problem.includes('has an input "title"'))).toBe(true);
+    });
+
+    it('reports a base an installed package exports in a form it cannot follow to a class', () => {
+      expect(about('FixtureLegacy')).toEqual([
+        'FixtureLegacy (selector "fixture-legacy", dist/index.js) was not fully checked: FixtureLegacy extends ' +
+          'FixtureCdkDisableable from @fixture/cdk, which could not be followed to a class in @fixture/cdk 1.4.0. ' +
+          'Check its inputs by hand, then add "FixtureLegacy" to ignore.',
+      ]);
+    });
+
+    it('reports a base an installed package compiled in full mode, rather than walking through it', () => {
+      // The base has a `title` and no host binding, as FixtureHeadline's does.
+      // Taken for a plain class, it would add nothing and this would pass.
+      expect(about('FixtureBanner')).toEqual([
+        'FixtureBanner (selector "fixture-banner", dist/index.js) was not fully checked: FixtureBanner extends ' +
+          "FixtureFullHeading (@fixture/full 2.0.0), which was compiled in full mode, and a base class's inputs " +
+          "become its subclass's own — a full-mode definition is code for the runtime rather than a partial " +
+          'declaration, so they cannot be read. Check its inputs by hand, then add "FixtureBanner" to ignore.',
+      ]);
     });
 
     it('reports a base that is not a class it can follow, such as a mixin call', () => {
@@ -164,9 +205,13 @@ describe('globalAttributeInputs', () => {
       expect(subjects(problems)).toEqual([
         'FixtureBadge',
         'FixtureBadge',
+        'FixtureBanner',
         'FixtureChip',
         'FixtureField',
+        'FixtureHeadline',
+        'FixtureHelp',
         'FixtureIconButton',
+        'FixtureLegacy',
         'FixtureLink',
         'FixtureNote',
         'FixtureRadio',

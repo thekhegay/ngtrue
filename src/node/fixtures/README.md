@@ -71,6 +71,18 @@ shape ng-zorro-antd ships. `declarations-headless/` is a library of attribute
 directives and an abstract base, nothing on a custom element, which has to be
 told that and not that it was compiled in full mode.
 
+`node_modules/@fixture/cdk/` is what they depend on, built the same way and
+installed where Node finds it from them, the part `@angular/cdk` plays for
+Material: a base that binds `title` away and one that does not, a host directive
+that applies one of its own and exposes it as `title`, one that exposes nothing,
+and a base exported as a mixin call. `declarations-broken/` also imports it as
+`@fixture/missing`, a name its build resolves through a path mapping and no
+`node_modules` holds, which is what a dependency that is not installed looks
+like to the check. `node_modules/@fixture/full/` is installed beside it and
+compiled in full mode: its base carries the same leaking `title` in a
+`ɵɵdefineDirective` call, which the check has to report rather than take for a
+plain class.
+
 The `angular-*` packages are Angular libraries for `angularPeerFloorsTooLow`,
 each built one with its bundles in the shape the Angular package builders emit.
 `angular-sound/` and `angular-prerelease/` link on every Angular their

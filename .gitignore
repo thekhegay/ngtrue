@@ -1,4 +1,7 @@
 node_modules/
+# Except the one the declaration fixtures find their dependency in, the way
+# Node would: what it holds is committed source, built like theirs.
+!/src/node/fixtures/node_modules/
 /dist/
 coverage/
 
@@ -16,3 +19,4 @@ docs/.vitepress/cache/
 # The partial-mode builds of the declaration fixtures, compiled on every test
 # run so the check reads what the installed compiler emits rather than a copy.
 src/node/fixtures/declarations-*/dist/
+src/node/fixtures/node_modules/**/dist/

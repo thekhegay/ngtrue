@@ -4,7 +4,7 @@
 
 > **globalAttributeInputs**(`options`): `Promise`\<readonly `string`[]\>
 
-Defined in: [src/node/global-attribute-inputs.ts:243](https://github.com/thekhegay/ngtrue/blob/main/src/node/global-attribute-inputs.ts#L243)
+Defined in: [src/node/global-attribute-inputs.ts:272](https://github.com/thekhegay/ngtrue/blob/main/src/node/global-attribute-inputs.ts#L272)
 
 Every input whose public name is an HTML global attribute with a visible
 effect, on a component whose host has no binding for that attribute — as one
@@ -57,8 +57,17 @@ surface is merged the way Angular merges it at runtime:
   Angular applies to the same element under the names the middle declaration
   gives them, at any depth; and every host binding along the way;
 - everything a base class contributes — inputs, host bindings, host
-  directives — when the base is in this package, followed through its own
-  `extends` in turn, across files and across entry points.
+  directives — followed through its own `extends` in turn, across files,
+  entry points and packages.
+
+A base class or a host directive from another package is read from that
+package as installed: found in the `node_modules` directories above the
+package, the way Node resolves the import — from the real path, so a pnpm
+store is searched where Node searches it — and read the same way as this
+one. Material's components extend CDK classes that bring inputs and host
+bindings of their own, and ngwr's sortable item carries `CdkDrag`; neither is
+answerable without reading `@angular/cdk`. A finding that runs through such a
+class names the package and the version that was read.
 
 A base TypeScript holds in a local is followed through it. A class with a
 member that carries a standard (TC39) decorator is emitted inside a function,
@@ -145,20 +154,31 @@ consumer chose, where the attribute's native meaning may be exactly what they
 want. Such declarations are skipped. One that names a custom element anywhere
 in its selector list is checked, directive or component alike.
 
-**A base class from another package is REPORTED, not passed.** Its inputs
-become the subclass's own, and they cannot be read from here, so the class is
-named as not fully checked. The same goes for a base the reader cannot follow
-to a class — a mixin call, say.
+**A base class from a package that is not installed is REPORTED, not
+passed.** Its inputs become the subclass's own, and with no `node_modules`
+above the package holding it there is nothing to read them from, so the class
+is named as not fully checked. The same goes for a base the reader cannot
+follow to a class — a mixin call, say — in this package or an installed one,
+and for a base an installed package ships compiled in full mode: its
+definition is code for the runtime rather than a declaration to read, and
+walking through it as a plain class would pass every input it declares.
 
-**A host directive from another package is REPORTED, and its aliases are
-still checked.** The names a host exposes from it are written in the host's
-own declaration, so a directive from elsewhere exposed as `title` is found
-like any other; its host bindings cannot be read, so that finding may
-describe an attribute the directive already removes, and says so. What
+**A host directive from a package that is not installed is REPORTED, and its
+aliases are still checked.** The names a host exposes from it are written in
+the host's own declaration, so a directive from elsewhere exposed as `title`
+is found like any other; its host bindings cannot be read, so that finding
+may describe an attribute the directive already removes, and says so. What
 cannot be read at all is the directive's OWN `hostDirectives`: Angular applies
 those to this host as well, under names only that package declares, so a
 static attribute can reach an input nobody in this package named. A host
 directive the reader cannot follow to a declaration is reported the same way.
+
+**The installed version, not the range.** A dependency is read as it is
+installed where the check runs. A range such as `^22.0.0` admits releases
+this did not read, and one in which a base gains a global-attribute input or
+drops a host binding changes the answer with no change to this package. The
+finding names the version for that reason; run the check again when the
+dependency moves.
 
 **Full compilation.** An application build emits `ɵɵdefineComponent`, which
 this does not read. A package with no partial declaration on a custom element
