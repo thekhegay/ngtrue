@@ -13,6 +13,8 @@ import {
   AliasedState,
   BothModels,
   CheckedState,
+  ClampsModel,
+  ClampsShown,
   CoercesValue,
   ControlState,
   DiamondState,
@@ -31,6 +33,7 @@ import {
   NoFocus,
   NoModel,
   NoReadonly,
+  NormalisesNull,
   RelayedState,
   ScoreState,
   ShadowedModel,
@@ -498,13 +501,80 @@ describe('assertSignalFormsControl', () => {
       expect(await ruleBrokenBy(create(HiddenTouch, '<hidden-touch [formField]="form.field" />'))).toBe('touch-output');
     });
 
-    it('value-round-trip — the value does not survive the trip in', async () => {
+    it('write-keeps-pristine — null normalised to an empty string by the first render', async () => {
+      const error = await errorFrom(
+        assertSignalFormsControl(create(NormalisesNull, '<normalises-null [formField]="form.field" />', null)),
+      );
+
+      expect(error.rule).toBe('write-keeps-pristine');
+      expect(error.message).toContain('has been rendered once');
+      expect(error.message).toContain('holding ""');
+    });
+
+    it('write-keeps-pristine — a clamp written back by the first render', async () => {
+      const error = await errorFrom(
+        assertSignalFormsControl(create(ClampsModel, '<clamps-model [formField]="form.field" />', 150)),
+      );
+
+      expect(error.rule).toBe('write-keeps-pristine');
+      expect(error.message).toContain('holding 100');
+    });
+
+    it('write-keeps-pristine — a clamp written back after the form writes an out-of-range value', async () => {
+      // Started in range, so the render has nothing to clamp; the probe write
+      // is what does it, which is the read a load or a patch would trip.
+      const error = await errorFrom(
+        assertSignalFormsControl(create(ClampsModel, '<clamps-model [formField]="form.field" />', 50), {
+          values: [150, 20],
+        }),
+      );
+
+      expect(error.rule).toBe('write-keeps-pristine');
+      expect(error.message).toContain('The form wrote 150 into the pristine field');
+      expect(error.message).toContain('ClampsModel reported 100 back');
+      expect(error.message).toContain('the first of `values`');
+    });
+
+    it('write-keeps-pristine — the default probe converted on the way in, which `values` is for', async () => {
+      // A control that coerces is the one the round trip used to catch here;
+      // the coercion is reported back and dirties the field, so the rule
+      // before the round trip catches it first, and has to say how to tell a
+      // false failure apart.
       const error = await errorFrom(
         assertSignalFormsControl(create(CoercesValue, '<coerces-value [formField]="form.field" />')),
       );
 
-      expect(error.rule).toBe('value-round-trip');
-      expect(error.message).toContain('The field wrote');
+      expect(error.rule).toBe('write-keeps-pristine');
+      expect(error.message).toContain('CoercesValue reported "[object Object]" back');
+      expect(error.message).toContain("ngtrue's default probe");
+      expect(error.message).toContain('outside its range');
+    });
+
+    it('value-round-trip — the write never reaches the model it resolved, and nothing comes back', async () => {
+      // A drift between the assertion's reading of the definitions and
+      // Angular's, simulated after Angular has bound: ShadowedModel loses its
+      // own `valueChange` and gains an exposure of WholeControl's pair, so the
+      // assertion resolves WholeControl's model while Angular goes on writing
+      // ShadowedModel's. The form's write lands in ShadowedModel, which keeps
+      // it as written, so nothing comes back and the field stays pristine; the
+      // model read here never sees the write, and the round trip, judged on
+      // that same write, is what says so.
+      const fixture = await rendered(hostFor(ShadowedModel, '<shadowed-model [formField]="form.field" />'));
+      const definition = (ShadowedModel as unknown as { ɵcmp: Record<string, unknown> }).ɵcmp;
+      const { outputs, hostDirectives } = definition;
+      try {
+        definition['outputs'] = { touch: 'touch' };
+        definition['hostDirectives'] = [
+          { directive: WholeControl, inputs: { value: 'value' }, outputs: { valueChange: 'valueChange' } },
+        ];
+        const error = await errorFrom(assertSignalFormsControl(fixture));
+
+        expect(error.rule).toBe('value-round-trip');
+        expect(error.message).toContain('the field is still pristine');
+      } finally {
+        definition['outputs'] = outputs;
+        definition['hostDirectives'] = hostDirectives;
+      }
     });
 
     it('value-round-trip — the value does not survive the trip out', async () => {
@@ -618,6 +688,55 @@ describe('assertSignalFormsControl', () => {
     });
   });
 
+  describe('a fixture that cannot answer the pristine rule', () => {
+    // Signal Forms reads `dirty` as false on a hidden, disabled or read-only
+    // field, whatever the control writes back, so a pass there would vouch for
+    // a control that clamps into its model as readily as for one that does
+    // not. One state at a time, because each is its own way in and a refusal
+    // that knew only two of them would pass anything on the third.
+    it.each<readonly [string, FieldRule]>([
+      ['hidden', field => hidden(field)],
+      ['disabled', field => disabled(field)],
+      ['readonly', field => readonly(field)],
+    ])('is refused when the field is %s, where nothing can make it dirty', async (state, rule) => {
+      const error = await errorFrom(
+        assertSignalFormsControl(() =>
+          TestBed.createComponent(stateHost(GoodText, '<good-text [formField]="form.field" />', [], rule)),
+        ),
+      );
+      expect(error.rule).toBe('write-keeps-pristine');
+      expect(error.message).toContain(`The bound field is ${state}, so it cannot be dirty`);
+    });
+
+    it('is refused when the value the form writes makes the field read-only', async () => {
+      // Interactive while it renders, read-only for the probe value: the
+      // refusal has to come after the write as well as before it.
+      const lockedByValue: FieldRule = field => readonly(field, ({ value }) => value() === 'locked');
+      const error = await errorFrom(
+        assertSignalFormsControl(
+          () =>
+            TestBed.createComponent(stateHost(GoodText, '<good-text [formField]="form.field" />', [], lockedByValue)),
+          { values: ['locked', 'open'] },
+        ),
+      );
+      expect(error.rule).toBe('write-keeps-pristine');
+      expect(error.message).toContain('The bound field is readonly once the form has written "locked" into it');
+    });
+
+    it("reports a field the test dirtied itself against the control, and says that it might be the test's", async () => {
+      // The contract: a fixture handed to the assertion is fresh, so nothing
+      // but the control has written to it. Telling a test's own write apart
+      // from a control's is not possible from the field, so the message names
+      // both.
+      const fixture = TestBed.createComponent(hostFor(GoodText, '<good-text [formField]="form.field" />'));
+      fieldOf(fixture).controlValue.set('typed by the test');
+
+      const error = await errorFrom(assertSignalFormsControl(fixture));
+      expect(error.rule).toBe('write-keeps-pristine');
+      expect(error.message).toContain('a test that wrote to the field before handing the fixture over');
+    });
+  });
+
   describe('a fixture that cannot answer the touch rule', () => {
     it('is refused when the field is already touched', async () => {
       const fixture = TestBed.createComponent(hostFor(GoodText, '<good-text [formField]="form.field" />'));
@@ -628,23 +747,56 @@ describe('assertSignalFormsControl', () => {
       expect(error.message).toContain('already touched');
     });
 
-    // Signal Forms reads `touched` as false on a hidden, disabled or read-only
-    // field, whatever the control emits. Reporting that as a control that is
-    // not wired would blame the control for the fixture's schema. One state at
-    // a time, because each is its own way in and a refusal that knew only two
-    // of them would blame the control for the third.
-    it.each<readonly [string, FieldRule]>([
-      ['hidden', field => hidden(field)],
-      ['disabled', field => disabled(field)],
-      ['readonly', field => readonly(field)],
-    ])('is refused when the field is %s, where touching does nothing', async (state, rule) => {
+    it('is refused when the value the round trip leaves makes the field read-only', async () => {
+      // Signal Forms reads `touched` as false on a hidden, disabled or
+      // read-only field, whatever the control emits, so reporting that as a
+      // control that is not wired would blame the control for the fixture's
+      // schema. The pristine rule refuses such a field before anything is
+      // written; this one is interactive until the round trip's second value
+      // turns it read-only, which only the touch rule is left to see.
+      const lockedByValue: FieldRule = field => readonly(field, ({ value }) => value() === 'locked');
       const error = await errorFrom(
-        assertSignalFormsControl(() =>
-          TestBed.createComponent(stateHost(GoodText, '<good-text [formField]="form.field" />', [], rule)),
+        assertSignalFormsControl(
+          () =>
+            TestBed.createComponent(stateHost(GoodText, '<good-text [formField]="form.field" />', [], lockedByValue)),
+          { values: ['open', 'locked'] },
         ),
       );
       expect(error.rule).toBe('touch-marks-touched');
-      expect(error.message).toContain(`The bound field is ${state}, so it cannot be touched`);
+      expect(error.message).toContain('The bound field is readonly, so it cannot be touched');
+    });
+  });
+
+  describe('the pristine rule', () => {
+    it('passes a plain model whose field starts at null', async () => {
+      await expect(
+        assertSignalFormsControl(create(GoodText, '<good-text [formField]="form.field" />', null)),
+      ).resolves.toBeUndefined();
+    });
+
+    it('passes a control that clamps only what it shows, started out of range', async () => {
+      // The sound twin of ClampsModel, held to the same start: the render
+      // hands it 150 and the field still holds 150 afterwards.
+      await expect(
+        assertSignalFormsControl(create(ClampsShown, '<clamps-shown [formField]="form.field" />', 150)),
+      ).resolves.toBeUndefined();
+    });
+
+    it('passes the same control when the out-of-range value is the one the form writes', async () => {
+      await expect(
+        assertSignalFormsControl(create(ClampsShown, '<clamps-shown [formField]="form.field" />', 50), {
+          values: [150, 20],
+        }),
+      ).resolves.toBeUndefined();
+    });
+
+    it('misses a clamp written back when nothing it writes is out of range', async () => {
+      // The limit the JSDoc names, pinned so the sentence goes when it stops
+      // being true: an in-range start and the default probes, an anonymous
+      // object ClampsModel's comparison leaves alone, give it nothing to clamp.
+      await expect(
+        assertSignalFormsControl(create(ClampsModel, '<clamps-model [formField]="form.field" />', 50)),
+      ).resolves.toBeUndefined();
     });
   });
 

@@ -4,7 +4,7 @@
 
 > **assertSignalFormsControl**\<`T`\>(`subject`, `options?`): `Promise`\<`void`\>
 
-Defined in: [src/testing/signal-forms-control.ts:281](https://github.com/thekhegay/ngtrue/blob/main/src/testing/signal-forms-control.ts#L281)
+Defined in: [src/testing/signal-forms-control.ts:339](https://github.com/thekhegay/ngtrue/blob/main/src/testing/signal-forms-control.ts#L339)
 
 Assert that a candidate control is wired to Angular's Signal Forms, and fail
 naming the rule that broke.
@@ -66,15 +66,45 @@ binding, and had to detect the miss at run time on the consumer's side. ngwr
 shipped twenty value controls with no tab stop on the host, and only the
 editor, in `e559a807`, declares the `focus()` that Signal Forms calls.
 
+## A value the form writes is not an edit
+
+Signal Forms cannot tell who changed a control's model. Every value a control
+reports back is recorded as the user's edit and marks the field dirty, so a
+control that adjusts a value it was HANDED — normalises `null` to `''`,
+clamps it into range, fills in a default — and writes the adjustment back
+turns a form that has only been loaded into one that has been edited, and
+says nothing. An unsaved-changes guard fires on a page nobody touched, and the
+value the form loaded is gone: a clamp written back deletes the very
+out-of-range value a `max()` rule exists to report.
+
+ngwr made this mistake three times before the rule was written here. Its
+input-number and slider stopped clamping into the model in `2905c03f`, its
+rating followed in `42cd197d` with a spec that a pristine field stays
+pristine, and `wr-knob` still clamps from an `effect`: a field started at 150
+against a maximum of 100 is dirty after the first render and holds 100. The
+classic-forms version of it, an accessor that reports `writeValue` back
+through `onChange`, reached PrimeNG's tracker more than once
+([primefaces/primeng#14095](https://github.com/primefaces/primeng/issues/14095),
+[primefaces/primeng#16474](https://github.com/primefaces/primeng/issues/16474)).
+
+The rule writes from the form's side twice and reads `dirty()` after each:
+once by rendering, which hands the control the value the fixture started the
+field with, and once through the field's `value.set`, which is what a load or
+a patch does. Only a DIFFERENT value written back can dirty the field, since a
+model emits only when its value changes, so the rule passes a control that
+adjusts nothing and one that adjusts only what it shows. It does not judge
+whether an adjustment is wanted, only that it is not recorded as an edit.
+
 ## What it checks
 
 Six rules are read off the runtime directive definitions, which is where
 Angular reads them: a `value` or `checked` `model()`, exactly one of the two,
 no `ControlValueAccessor` competing for the binding, and inputs named
-`disabled` and `readonly` beside an output named `touch`. Three more are
-driven through the bound field: the value must cross in both directions,
-`touch` must actually mark the field touched, and asking the field to focus
-its control must leave focus on the host element or inside it.
+`disabled` and `readonly` beside an output named `touch`. Four more are
+driven through the bound field: a value the form writes must leave the field
+pristine, the value must cross in both directions, `touch` must actually mark
+the field touched, and asking the field to focus its control must leave focus
+on the host element or inside it.
 
 Every name is matched as Angular matches it — by the PUBLIC binding name, not
 the class property. `value = model('', { alias: 'val' })` is a control
@@ -182,6 +212,22 @@ that updates the field when you type and forgets to when you pick from its
 own panel passes this and is broken. That needs the control's own
 interactions and belongs in the control's own spec.
 
+**The pristine rule sees an adjustment only when the value written needs
+one.** It writes the fixture's starting value and the first probe value, and
+nothing else. The default probe is an anonymous object, which is never out of
+range, so an in-range start and the default `values` never put a clamp to
+work: a control that clamps into its model with a comparison passes, and one
+whose clamp turns an object into `NaN` fails as a conversion, which in-range
+`values` then make pass. Start the fixture's field out of range, or pass
+`values` whose first value is, and the clamp has to show itself. The same
+goes for a control that normalises only some values — whitespace, case, a
+date's time of day: it is caught by a start or a first value it would change.
+
+It also takes the fixture at its word. Nothing but the control is supposed to
+write to the field before the assertion does, so a field that is dirty after
+the first render is reported against the control — and a test that dirtied
+the field itself before handing it over gets the same report.
+
 **The focus rule proves focus arrived, not that it arrived somewhere
 useful.** jsdom has no layout, so it cannot tell a visible target from one
 nobody can see: a target clipped to nothing, moved off-screen, zero-sized or
@@ -205,12 +251,13 @@ being blurred is not seen by the starting-point check either.
 The value is written twice, the field is marked touched and focus is moved
 into the control, with no attempt to put any of it back: a restore that
 silently failed would leave a later assertion reading a value this function
-chose. Give it a fixture of its own, attached to the document the way
-`TestBed.createComponent` attaches it — nothing detached can take focus —
-and bound to a field the schema leaves interactive: Signal Forms reads
-`touched` as false on a hidden, disabled or read-only field whatever has been
-marked, so the touch rule refuses such a fixture rather than blaming the
-control for it.
+chose. Give it a fixture of its own: fresh, since a field that is already
+dirty is read as the control's doing; attached to the document the way
+`TestBed.createComponent` attaches it, since nothing detached can take focus;
+and bound to a field the schema leaves interactive. Signal Forms reads
+`dirty` and `touched` as false on a hidden, disabled or read-only field
+whatever has been written or marked, so the pristine and touch rules refuse
+such a fixture rather than vouch for the control or blame it.
 
 ## Type Parameters
 

@@ -90,6 +90,7 @@ cannot be evaluated until the earlier ones hold.
 | `touch-output`          | An output named exactly `touch`                                         |
 | `disabled-input`        | An input named `disabled`                                               |
 | `readonly-input`        | An input named `readonly`                                               |
+| `write-keeps-pristine`  | A value the form writes leaves a pristine field pristine                |
 | `value-round-trip`      | The value crosses in both directions                                    |
 | `touch-marks-touched`   | Emitting `touch` marks the field touched                                |
 | `focus-reaches-control` | Asking the field to focus the control leaves focus on it or inside it   |
@@ -128,6 +129,71 @@ inside it. Forwarding is the usual fix, and the example above does it.
 
 There is no option to switch a rule off. A conformance suite you can quiet is a
 conformance suite that tells you what you wanted to hear.
+
+## A value the form writes is not an edit
+
+Signal Forms cannot tell who changed a control's model. Every value a control
+reports back is recorded as the user's edit and marks the field dirty. So a
+control that adjusts a value it was **handed** — normalises `null` to `''`,
+clamps it into range, fills in a default — and writes the adjustment back turns
+a form that has only been loaded into one that has been edited. Nothing says so:
+an unsaved-changes guard fires on a page nobody touched, and the value the form
+loaded is gone. A clamp written back deletes the very out-of-range value a
+`max()` rule exists to report.
+
+```ts
+const MAX = 100;
+
+// Dirties a form that has only been loaded, and replaces what it loaded with 100.
+export class ClampsTheModel {
+  readonly value = model(0);
+
+  constructor() {
+    effect(() => {
+      if (this.value() > MAX) this.value.set(MAX);
+    });
+  }
+}
+
+// Leaves it pristine: only what the user sees is clamped, and a `max()` rule on
+// the schema reports the out-of-range value.
+export class ClampsTheDisplay {
+  readonly value = model(0);
+  protected readonly shown = computed(() => Math.min(this.value(), MAX));
+}
+```
+
+Decorators, `disabled`, `readonly`, `touch` and `focus()` are left out of both;
+what differs is only where the clamp lands.
+
+`write-keeps-pristine` writes from the form's side twice and reads `dirty()`
+after each: once by rendering, which hands the control the value the fixture
+started the field with, and once through the field's `value.set`, the way a load
+or a patch writes. Only a different value written back can dirty the field, so
+the rule passes a control that adjusts nothing and one that adjusts only what it
+shows. It does not judge whether an adjustment is wanted, only that it is not
+recorded as an edit.
+
+It sees a clamp only when something written is out of range, and the default
+probes are anonymous objects, which never are. For a control that clamps, start
+the fixture's field out of range on purpose:
+
+```ts
+@Component({
+  template: `<my-knob [formField]="form.level" />`,
+  imports: [MyKnob, FormField],
+})
+class Host {
+  // Above the knob's maximum of 100, so a clamp written back has something to do.
+  readonly model = signal({ level: 150 });
+  readonly form = form(this.model);
+}
+```
+
+Or pass `values` whose first value is out of range, `{ values: [150, 20] }`,
+which is the one the form writes. The same goes for a control that normalises
+only some values — whitespace, case, a date's time of day: it is caught by a
+start or a first value it would change.
 
 ## Names are matched the way Angular matches them
 
@@ -254,10 +320,12 @@ either on.
 
 ## Controls that normalise their value
 
-The round trip drives the field with two anonymous objects, which is right for a
-control whose model passes values through untouched — most of them. A control
-that coerces will rightly refuse an object, and that is a false failure rather
-than a defect. Give it values it accepts:
+The value rules drive the field with two anonymous objects. The first is written
+from the form's side and has to leave the field pristine and reach the model;
+the second is written by the control and has to reach the field. That is right
+for a control whose model passes values through untouched — most of them. A
+control that coerces will rightly change an object, and that is a false failure
+rather than a defect. Give it values it keeps as written:
 
 ```ts
 await assertSignalFormsControl(() => TestBed.createComponent(Host), { values: [1, 2] });
@@ -310,6 +378,17 @@ deferred with `afterNextRender` passes; one deferred with `setTimeout` is
 reported as a miss, though focus would get there in an application. No timer is
 awaited, so the assertion works under fake timers.
 
+**The pristine rule sees an adjustment only when the value written needs one.**
+It writes the fixture's starting value and the first probe value, and nothing
+else, so an in-range start and the default `values` never put a clamp to work.
+A control that clamps into its model passes with them, or fails on the default
+probe as a conversion and then passes on in-range `values` — the example above
+shows how to give the clamp something to do. It also takes the fixture at its
+word: nothing but the control is supposed to write to the field before the
+assertion does, so a field that is dirty after the first render is reported
+against the control, and a test that dirtied the field itself before handing it
+over gets the same report.
+
 **The round trip proves the binding, not the component.** It shows that the
 model resolved from the definitions is the one Angular connected and that a
 value survives the trip. It says nothing about whether the component writes its
@@ -321,9 +400,11 @@ own spec.
 **The fixture is spent afterwards.** The value is written twice, the field is
 marked touched and focus is moved into the control, with no attempt to put any
 of it back: a restore that silently failed would leave a later assertion reading
-a value this function chose. Bind the control to a field the schema leaves
-interactive, too: Signal Forms reads `touched` as false on a hidden, disabled or
-read-only field, so `touch-marks-touched` refuses that fixture rather than
-blaming the control for it. And keep the fixture attached to the document, the
-way `TestBed.createComponent` leaves it — nothing detached can take focus, and
-the focus rule says so rather than blaming the control.
+a value this function chose. Hand it a fresh fixture, since a field that is
+already dirty is read as the control's doing. Bind the control to a field the
+schema leaves interactive, too: Signal Forms reads `dirty` and `touched` as
+false on a hidden, disabled or read-only field whatever has been written or
+marked, so `write-keeps-pristine` and `touch-marks-touched` refuse that fixture
+rather than vouch for the control or blame it. And keep the fixture attached to
+the document, the way `TestBed.createComponent` leaves it — nothing detached can
+take focus, and the focus rule says so rather than blaming the control.

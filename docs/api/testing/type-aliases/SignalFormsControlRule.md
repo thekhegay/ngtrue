@@ -2,7 +2,7 @@
 
 # Type Alias: SignalFormsControlRule
 
-> **SignalFormsControlRule** = `"value-model"` \| `"single-model"` \| `"no-value-accessor"` \| `"touch-output"` \| `"disabled-input"` \| `"readonly-input"` \| `"value-round-trip"` \| `"touch-marks-touched"` \| `"focus-reaches-control"`
+> **SignalFormsControlRule** = `"value-model"` \| `"single-model"` \| `"no-value-accessor"` \| `"touch-output"` \| `"disabled-input"` \| `"readonly-input"` \| `"write-keeps-pristine"` \| `"value-round-trip"` \| `"touch-marks-touched"` \| `"focus-reaches-control"`
 
 Defined in: [src/testing/signal-forms-control.ts:19](https://github.com/thekhegay/ngtrue/blob/main/src/testing/signal-forms-control.ts#L19)
 
