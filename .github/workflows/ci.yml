@@ -31,11 +31,23 @@ jobs:
 
       - run: npm run typecheck
 
-      # Before the tests, and not only because `pretest` would do it anyway:
-      # a build failure should be reported as a build failure.
+      # Before the tests, and not only because `pretest:coverage` would do it
+      # anyway: a build failure should be reported as a build failure.
       - run: npm run build
 
-      - run: npm test
+      # `npm test`, instrumented. Its own `pretest:coverage` builds the
+      # fixtures: npm runs `pre<name>` for the script's own name only, so
+      # `pretest` does not run here.
+      - run: npm run test:coverage
+
+      # Never fails the job. The number is a pointer for a reader, not a gate,
+      # and an upload that cannot authenticate — a pull request from a fork has
+      # no secrets — should not turn a green run red.
+      - uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
+          fail_ci_if_error: false
 
       # The committed API reference against what the sources say now. Fails on a
       # change that was made without regenerating it, which is the only way a
