@@ -153,7 +153,17 @@ export class PartialDeclarationReader {
     const node = unwrap(ts, expression);
     if (depth > MAX_DEPTH) return { kind: 'unresolved', name: node.getText() };
 
-    if (ts.isIdentifier(node)) return this.#resolveName(module, node.text, depth + 1);
+    if (ts.isIdentifier(node)) {
+      // A name the module scope does not hold may be a local of a function the
+      // class sits in. TypeScript wraps a class with a member carrying a
+      // standard decorator in one and keeps its base there — `let _classSuper =
+      // NzTreeBase; … return class NzCascaderComponent extends _classSuper` —
+      // so the blocks around the name are asked first, as the engine would.
+      const local = blockInitializer(ts, node);
+      if (local === null) return { kind: 'unresolved', name: node.text };
+      if (local !== undefined) return this.resolve(module, local, depth + 1);
+      return this.#resolveName(module, node.text, depth + 1);
+    }
 
     if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)) {
       const binding = module.locals.get(node.expression.text);
@@ -578,6 +588,27 @@ function returnedExpression(ts: Ts, factory: TS.Expression): TS.Expression | und
   if (!ts.isBlock(fn.body)) return fn.body;
   const [only] = fn.body.statements;
   return only !== undefined && ts.isReturnStatement(only) ? only.expression : undefined;
+}
+
+/**
+ * The initializer of the variable a block around `name` declares under that
+ * name: `null` when it declares one without, `undefined` when no block does and
+ * the module scope is the one to ask. The nearest block wins, as it does in the
+ * engine, so a local shadowing a module binding is never mistaken for it.
+ */
+function blockInitializer(ts: Ts, name: TS.Identifier): TS.Expression | null | undefined {
+  for (let node: TS.Node = name.parent; !ts.isSourceFile(node); node = node.parent) {
+    if (!ts.isBlock(node)) continue;
+    for (const statement of node.statements) {
+      if (!ts.isVariableStatement(statement)) continue;
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name) && declaration.name.text === name.text) {
+          return declaration.initializer ?? null;
+        }
+      }
+    }
+  }
+  return undefined;
 }
 
 function unwrap(ts: Ts, node: TS.Expression): TS.Expression {

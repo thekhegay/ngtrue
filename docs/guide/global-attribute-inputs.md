@@ -67,6 +67,11 @@ contributes, followed through the whole `extends` chain and across entry
 points. Host bindings are merged the same way, so a base class or a host
 directive that binds the attribute away counts.
 
+A base TypeScript keeps in a local is followed through it. A class with a
+member that carries a standard decorator is emitted inside a function, as
+`let _classSuper = Base; … return class … extends _classSuper`, which is how
+ng-zorro-antd ships several of its components.
+
 Names are compared lowercased. `tabIndex="0"` written statically sets an input
 called `tabIndex` and lands on the element as `tabindex`.
 
@@ -115,8 +120,11 @@ the code it excuses.
   own host directives to your host too, under names only its package declares,
   so the class is named as not fully checked. The names your host exposes from
   it are still checked.
-- **A package with no partial declarations on a custom element** — compiled in
-  full mode, or the wrong directory. One finding says nothing was checked.
+- **A package with nothing on a custom element.** One finding says nothing was
+  checked, and why. With no partial declarations at all, the package was
+  compiled in full mode or the path is the wrong directory. With declarations
+  that all sit on an attribute selector, a native element or no selector, it is
+  a headless directive library, built the right way, with nothing in scope.
 - **A package with no `exports`.** There is no list of files to start from.
 
 ## What it does not check

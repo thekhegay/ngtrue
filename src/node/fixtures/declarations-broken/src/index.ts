@@ -35,6 +35,18 @@ export abstract class FixtureChoice extends FixtureControl {}
 @Component({ selector: 'fixture-radio', template: '<input type="radio" [id]="id()" />' })
 export class FixtureRadio extends FixtureChoice {}
 
+/** A field decorator in the standard form, the kind ng-zorro-antd's `@WithConfig()` is. It does nothing. */
+function configurable(_value: undefined, _context: ClassFieldDecoratorContext): void {}
+
+/**
+ * FixtureRadio's leak in a class TypeScript wraps in a function for its
+ * decorated field, holding the base in a local the module scope does not have.
+ */
+@Component({ selector: 'fixture-toggle', template: '<input type="checkbox" [id]="id()" />' })
+export class FixtureToggle extends FixtureControl {
+  @configurable size = 'medium';
+}
+
 /** A mixin, as a pre-signals library might write one: the base is a call, not a class. */
 export function withSize<T extends abstract new (...args: never[]) => object>(base: T): T {
   return base;

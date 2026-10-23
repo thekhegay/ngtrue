@@ -35,6 +35,7 @@ export const FIXTURES = {
   unexportedStale: `${here}/unexported-stale`,
   declarationsSound: `${here}/declarations-sound`,
   declarationsBroken: `${here}/declarations-broken`,
+  declarationsHeadless: `${here}/declarations-headless`,
   angularSound: `${here}/angular-sound`,
   angularFloorLow: `${here}/angular-floor-low`,
   angularService: `${here}/angular-service`,

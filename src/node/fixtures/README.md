@@ -64,7 +64,12 @@ not: `npm run fixtures` builds each with `ngc` in partial mode, the form a
 published library ships, so the check always reads what the installed compiler
 emits. Every class in them is one route an input can reach a host by — its own,
 inherited, exposed by a host directive or by that directive's own host
-directive — or one shape the check has to report rather than pass.
+directive — or one shape the check has to report rather than pass. Both are
+built with standard decorators, so the class with a decorated field in each
+comes out wrapped in a function with its base in a `_classSuper` local, the
+shape ng-zorro-antd ships. `declarations-headless/` is a library of attribute
+directives and an abstract base, nothing on a custom element, which has to be
+told that and not that it was compiled in full mode.
 
 The `angular-*` packages are Angular libraries for `angularPeerFloorsTooLow`,
 each built one with its bundles in the shape the Angular package builders emit.
