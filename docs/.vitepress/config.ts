@@ -46,6 +46,7 @@ export default defineConfig({
         text: 'Exports',
         items: [
           { text: 'assertSignalFormsControl', link: '/guide/assert-signal-forms-control' },
+          { text: 'assertNoZoneEventWaits', link: '/guide/assert-no-zone-event-waits' },
           { text: 'unresolvedExports', link: '/guide/unresolved-exports' },
           { text: 'unresolvableTypes', link: '/guide/unresolvable-types' },
           { text: 'unexportedTypes', link: '/guide/unexported-types' },

@@ -16,3 +16,9 @@ export {
   type SignalFormsControlOptions,
   type SignalFormsControlRule,
 } from './signal-forms-control.js';
+export {
+  assertNoZoneEventWaits,
+  ZoneEventWaitError,
+  type ZoneEventWait,
+  type ZoneEventWaitOptions,
+} from './zone-event-waits.js';

@@ -163,6 +163,13 @@ worth checking is written with `model()` — so JIT fixtures would have the suit
 proving itself against controls nobody writes. Measured, not assumed: a JIT
 `model()` control reports `inputs {}`.
 
+`src/testing/fixtures/zone-waits.ts` is not compiled, on purpose. Its components
+declare no initializer API, and what `assertNoZoneEventWaits` watches — a
+subscription made from a constructor, a lifecycle hook or a listener — runs the
+same however the class was compiled, so they are imported from source and
+compiled just-in-time like the spec hosts. A fixture there that needs `input()`
+belongs in `controls.ts` instead.
+
 `ngc` rather than a vite plugin, because every plugin that does this pulls in
 `@angular/build` — a whole build system this package does not otherwise have,
 for two dozen lines of fixture. `@angular/compiler-cli` already ships `ngc`, the
