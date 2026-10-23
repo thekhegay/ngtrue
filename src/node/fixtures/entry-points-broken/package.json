@@ -1,0 +1,22 @@
+{
+  "name": "@fixture/entry-points-broken",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.js",
+    "./query": "./dist/query.js",
+    "./host": "./dist/host.js",
+    "./server": "./dist/server.js",
+    "./map": "./dist/map.js",
+    "./util": "./dist/util.js",
+    "./cycle-a": "./dist/cycle/a.js",
+    "./cycle-b": "./dist/cycle/b.js",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "fixture-map": "^1.0.0"
+  },
+  "peerDependencies": {
+    "@angular/core": "^22.0.0"
+  }
+}

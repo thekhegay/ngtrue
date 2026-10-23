@@ -97,4 +97,29 @@ block put the same kind of service in a chunk only `import()` reaches.
 `angular-unbuilt/` is a manifest checked before its build ran, under a range no
 version satisfies.
 
+The `entry-points-*` packages are for `unloadableEntryPoints`, which imports
+them, so each carries its dependencies in a `node_modules/` of its own, laid out
+the way an install would (`.gitignore` lets those through and nothing else).
+`entry-points-sound/` and `entry-points-broken/` are little Angular libraries
+built by `npm run fixtures` with `ngc` in partial mode, like the declarations
+pair, which also puts the check's loading of `@angular/compiler` under test:
+without it, the sound package does not load at all. Their entry points pair up,
+each pair differing in one thing: constructor injection, a signal query and a
+`forwardRef` host directive with the class they name declared above or below
+them; `window` read behind a guard or at the top level; a DOM-reading dependency
+in the shape of leaflet imported where it is used or statically. The sound
+package adds `inject()` of a class declared below, which loads and which
+`@typescript-eslint/no-use-before-define` reports. The broken package adds an
+entry point with nothing wrong, and a shared chunk in an import cycle that only
+throws when its own entry point is imported first — the reason every entry
+point gets a fresh process. `entry-points-unlinked/` is sound code that Node's
+loader refuses to link here — a CommonJS named import and JSON without an import
+attribute, both of which a bundler loads, and a package that is not installed,
+which a consumer of that entry point would have — next to a pattern and a
+stylesheet-only subpath. Nothing in it loads under Node, so acknowledging every
+line still leaves a run that imported nothing, which is reported.
+`entry-points-localized/` needs a preload, and `entry-points-unsettled/` never
+finishes importing in the three ways a process can: Node gives up, the timeout
+does, or the module exits.
+
 They are excluded from `tsconfig.build.json` and never published.

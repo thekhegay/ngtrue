@@ -24,6 +24,7 @@ here are the ones you only have when other people install your code:
 - Does the manifest describe the files the build actually produced?
 - Will the types resolve for a consumer whose `tsconfig.json` is not yours?
 - Will `ng add` and `ng update` load the schematics you ship?
+- Can a test runner or a server import every entry point you ship?
 
 ## Install
 
@@ -75,6 +76,7 @@ import {
   globalAttributeInputs,
   peerDependencyMismatches,
   unexportedTypes,
+  unloadableEntryPoints,
   unloadableSchematics,
   unresolvableTypes,
   unresolvedExports,
@@ -98,6 +100,10 @@ it('declares what it imports, and imports what it declares', () => {
 
 it('ships schematics the CLI can load', async () => {
   expect(await unloadableSchematics({ packageDir: 'dist' })).toEqual([]);
+});
+
+it('loads every entry point unlinked and without a DOM', async () => {
+  expect(await unloadableEntryPoints({ packageDir: 'dist' })).toEqual([]);
 });
 
 it('keeps a static title off the host', async () => {

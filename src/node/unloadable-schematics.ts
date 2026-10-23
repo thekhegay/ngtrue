@@ -3,7 +3,7 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, rmdirSync, st
 import { createRequire } from 'node:module';
 import { dirname, isAbsolute, join, posix, relative, resolve, sep, win32 } from 'node:path';
 
-import { readManifest } from './manifest.js';
+import { PACKAGE_NAME, readManifest } from './manifest.js';
 
 /**
  * Options for {@link unloadableSchematics}.
@@ -205,17 +205,6 @@ export async function unloadableSchematics(options: UnloadableSchematicsOptions)
     probe.dispose();
   }
 }
-
-/**
- * A package name as it can sit in `node_modules`: one segment, or a scope and
- * one segment, neither starting with a dot.
- *
- * Checked before anything is staged, because the name becomes a path under the
- * probe, and `../../typescript` would copy the package over the repository's
- * own install rather than into the throwaway directory that is removed
- * afterwards.
- */
-const PACKAGE_NAME = /^(?:@[^/\\.][^/\\]*\/)?[^/\\.@][^/\\]*$/;
 
 /** The slice of the devkit this check drives. Typed here so the peer stays optional. */
 interface SchematicsDevkit {

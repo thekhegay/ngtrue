@@ -6,6 +6,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { angularPeerFloorsTooLow } from './angular-peer-floors-too-low.js';
 import { peerDependencyMismatches } from './peer-dependency-mismatches.js';
 import { unexportedTypes } from './unexported-types.js';
+import { unloadableEntryPoints } from './unloadable-entry-points.js';
 import { unresolvableTypes } from './unresolvable-types.js';
 import { unresolvedExports } from './unresolved-exports.js';
 
@@ -44,6 +45,14 @@ describe('ngtrue, checked by ngtrue', () => {
 
   it('exports every type its public signatures name', async () => {
     expect(await unexportedTypes({ packageDir: ROOT })).toEqual([]);
+  });
+
+  it('loads every entry point in plain Node, where a consumer may run it', async () => {
+    // `ngtrue/testing` brings in `@angular/forms` and `@angular/common`, whose
+    // partial declarations throw unlinked unless the JIT compiler is loaded
+    // first (`PlatformLocation` is the first to go), so this also holds the
+    // check to a real package that only loads with it.
+    expect(await unloadableEntryPoints({ packageDir: ROOT })).toEqual([]);
   });
 
   it('declares what it imports, and imports what it declares', () => {

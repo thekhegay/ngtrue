@@ -2,6 +2,10 @@ node_modules/
 # Except the one the declaration fixtures find their dependency in, the way
 # Node would: what it holds is committed source, built like theirs.
 !/src/node/fixtures/node_modules/
+# And the dependencies the entry-point fixtures carry: `unloadableEntryPoints`
+# imports those packages for real, so each sits beside the install it would
+# have, and these are part of the fixture rather than of anybody's install.
+!src/node/fixtures/entry-points-*/node_modules/
 /dist/
 coverage/
 
@@ -20,3 +24,5 @@ docs/.vitepress/cache/
 # run so the check reads what the installed compiler emits rather than a copy.
 src/node/fixtures/declarations-*/dist/
 src/node/fixtures/node_modules/**/dist/
+src/node/fixtures/entry-points-sound/dist/
+src/node/fixtures/entry-points-broken/dist/

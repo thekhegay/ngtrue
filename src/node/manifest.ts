@@ -32,6 +32,18 @@ export interface ExportTarget {
   readonly target: string | null;
 }
 
+/**
+ * A package name as it can sit in `node_modules`: one segment, or a scope and
+ * one segment, neither starting with a dot.
+ *
+ * Checked before a name is used for anything, because a check turns it into a
+ * path or a specifier. Under a probe, `../../typescript` would copy the package
+ * over the repository's own install rather than into the throwaway directory
+ * that is removed afterwards; as a specifier, `../x/sub` is a relative path,
+ * and the import would load some other file than the package.
+ */
+export const PACKAGE_NAME = /^(?:@[^/\\.][^/\\]*\/)?[^/\\.@][^/\\]*$/;
+
 export function readManifest(packageDir: string): Manifest {
   const path = join(packageDir, 'package.json');
   let raw: string;

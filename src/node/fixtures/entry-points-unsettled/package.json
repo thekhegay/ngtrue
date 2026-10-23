@@ -1,0 +1,11 @@
+{
+  "name": "fixture-entry-points-unsettled",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./never.js",
+    "./busy": "./busy.js",
+    "./exit": "./exit.js",
+    "./package.json": "./package.json"
+  }
+}

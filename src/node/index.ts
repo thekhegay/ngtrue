@@ -21,5 +21,6 @@ export { globalAttributeInputs, type GlobalAttributeInputsOptions } from './glob
 export { peerDependencyMismatches, type PeerDependencyMismatchesOptions } from './peer-dependency-mismatches.js';
 export { unexportedTypes, type UnexportedTypesOptions } from './unexported-types.js';
 export { unresolvableTypes, type ResolutionMode, type UnresolvableTypesOptions } from './unresolvable-types.js';
+export { unloadableEntryPoints, type UnloadableEntryPointsOptions } from './unloadable-entry-points.js';
 export { unloadableSchematics, type UnloadableSchematicsOptions } from './unloadable-schematics.js';
 export { unresolvedExports, type UnresolvedExportsOptions } from './unresolved-exports.js';
