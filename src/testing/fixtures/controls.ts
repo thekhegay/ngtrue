@@ -18,6 +18,7 @@
 import {
   afterNextRender,
   Component,
+  computed,
   DestroyRef,
   Directive,
   DOCUMENT,
@@ -646,4 +647,91 @@ export class FocusFromHost implements FormValueControl<unknown> {
   readonly disabled = input(false);
   readonly readonly = input(false);
   readonly touch = output<void>();
+}
+
+// Controls that change a value the form wrote to them.
+//
+// Signal Forms records every value a control reports through its model as the
+// user's edit, so a control that adjusts what it was handed and writes the
+// adjustment back marks the field dirty before anybody has touched it. All
+// three are complete in every other way, `focus()` included, because that is
+// the point of the broken two: before `write-keeps-pristine` they passed every
+// rule in the suite.
+
+/** The most {@link ClampsShown} and {@link ClampsModel} will show. Fixed, so nothing but the value is in play. */
+const LIMIT = 100;
+
+/**
+ * A number control that shows at most {@link LIMIT} and leaves the model alone
+ * — the shape ngwr's input-number and slider moved to in `2905c03f`, after
+ * clamping into the model marked loaded forms dirty. A field that starts at 150
+ * still holds 150 and is still pristine; that 150 is out of range is a
+ * validator's to report and the user's to fix.
+ */
+@Component({ selector: 'clamps-shown', template: '<input #el type="number" [value]="shown()" />' })
+export class ClampsShown implements FormValueControl<number | null> {
+  readonly value = model<number | null>(null);
+  readonly disabled = input(false);
+  readonly readonly = input(false);
+  readonly touch = output<void>();
+  protected readonly shown = computed(() => {
+    const value = this.value();
+    return value === null ? null : Math.min(value, LIMIT);
+  });
+  private readonly field = viewChild.required<ElementRef<HTMLInputElement>>('el');
+
+  focus(options?: FocusOptions): void {
+    this.field().nativeElement.focus(options);
+  }
+}
+
+/**
+ * The same control clamping its MODEL instead — ngwr's `wr-knob` as it ships,
+ * which writes the clamp back from an `effect`. A field that starts at 150 is
+ * dirty after the first render and holds 100: the out-of-range value a `max()`
+ * rule exists to report is gone, and an unsaved-changes guard fires on a page
+ * nobody edited.
+ */
+@Component({ selector: 'clamps-model', template: '<input #el type="number" [value]="value()" />' })
+export class ClampsModel implements FormValueControl<number | null> {
+  readonly value = model<number | null>(null);
+  readonly disabled = input(false);
+  readonly readonly = input(false);
+  readonly touch = output<void>();
+  private readonly field = viewChild.required<ElementRef<HTMLInputElement>>('el');
+
+  constructor() {
+    effect(() => {
+      const value = this.value();
+      if (value !== null && value > LIMIT) this.value.set(LIMIT);
+    });
+  }
+
+  focus(options?: FocusOptions): void {
+    this.field().nativeElement.focus(options);
+  }
+}
+
+/**
+ * A text control that will not hold `null` and puts an empty string in its
+ * place, on every write — the first render's included. A form that starts the
+ * field at `null` is dirty after the first render and holds `''`.
+ */
+@Component({ selector: 'normalises-null', template: '<input #el [value]="value()" />' })
+export class NormalisesNull implements FormValueControl<string | null> {
+  readonly value = model<string | null>(null);
+  readonly disabled = input(false);
+  readonly readonly = input(false);
+  readonly touch = output<void>();
+  private readonly field = viewChild.required<ElementRef<HTMLInputElement>>('el');
+
+  constructor() {
+    effect(() => {
+      if (this.value() === null) this.value.set('');
+    });
+  }
+
+  focus(options?: FocusOptions): void {
+    this.field().nativeElement.focus(options);
+  }
 }

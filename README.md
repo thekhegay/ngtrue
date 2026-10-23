@@ -60,7 +60,7 @@ it('is a conforming Signal Forms control', async () => {
 });
 ```
 
-One assertion, nine rules, and a failure that names the rule that broke rather
+One assertion, ten rules, and a failure that names the rule that broke rather
 than the line that noticed. It is stricter than `FormValueControl` deliberately:
 Angular makes `disabled`, `readonly` and `touch` optional, and a control that
 omits them binds and renders while the schema rules that reach for them

@@ -7,7 +7,7 @@ import {
 } from '@angular/core';
 import type { ComponentFixture } from '@angular/core/testing';
 import { NG_VALUE_ACCESSOR } from '@angular/forms';
-import { FormField } from '@angular/forms/signals';
+import { FormField, type FieldState } from '@angular/forms/signals';
 
 /**
  * The rules {@link assertSignalFormsControl} can break, in the order it checks
@@ -23,6 +23,7 @@ export type SignalFormsControlRule =
   | 'touch-output'
   | 'disabled-input'
   | 'readonly-input'
+  | 'write-keeps-pristine'
   | 'value-round-trip'
   | 'touch-marks-touched'
   | 'focus-reaches-control';
@@ -49,17 +50,27 @@ export interface SignalFormsControlOptions {
   readonly selector?: string;
 
   /**
-   * Two distinct values to drive the round trip with, for a control that does
-   * not pass its value through untouched.
+   * Two distinct values to drive the value rules with, for a control that does
+   * not pass its value through untouched. The first is written from the form's
+   * side, the way a load or a patch writes, and has to leave the field pristine
+   * and arrive in the model; the second is written by the control and has to
+   * arrive in the field.
    *
    * The default is a pair of objects with no meaning to anything, which is
    * right for the common case: a `model()` has no transform, so whatever the
    * field writes is what the model reports back. A control that normalises —
    * trims a string, coerces a number, refuses an unparseable entry — will
-   * rightly not echo an anonymous object, and that is a false failure rather
+   * rightly not keep an anonymous object, and that is a false failure rather
    * than a defect. Pass two values it accepts. A `checked` model, and a `value`
    * model currently holding a boolean, need nothing: the probe flips the value
    * it finds.
+   *
+   * The default never puts a clamp to work either, because an object is never
+   * out of range: a clamp that compares leaves it alone, and one that does
+   * arithmetic turns it into `NaN`, which reads as a conversion. For a control
+   * that clamps, make the FIRST value one it would clamp — or start the
+   * fixture's field out of range — so that a clamp written back into the model
+   * has something to do.
    */
   readonly values?: readonly [unknown, unknown];
 }
@@ -125,15 +136,45 @@ export interface SignalFormsControlOptions {
  * shipped twenty value controls with no tab stop on the host, and only the
  * editor, in `e559a807`, declares the `focus()` that Signal Forms calls.
  *
+ * ## A value the form writes is not an edit
+ *
+ * Signal Forms cannot tell who changed a control's model. Every value a control
+ * reports back is recorded as the user's edit and marks the field dirty, so a
+ * control that adjusts a value it was HANDED — normalises `null` to `''`,
+ * clamps it into range, fills in a default — and writes the adjustment back
+ * turns a form that has only been loaded into one that has been edited, and
+ * says nothing. An unsaved-changes guard fires on a page nobody touched, and the
+ * value the form loaded is gone: a clamp written back deletes the very
+ * out-of-range value a `max()` rule exists to report.
+ *
+ * ngwr made this mistake three times before the rule was written here. Its
+ * input-number and slider stopped clamping into the model in `2905c03f`, its
+ * rating followed in `42cd197d` with a spec that a pristine field stays
+ * pristine, and `wr-knob` still clamps from an `effect`: a field started at 150
+ * against a maximum of 100 is dirty after the first render and holds 100. The
+ * classic-forms version of it, an accessor that reports `writeValue` back
+ * through `onChange`, reached PrimeNG's tracker more than once
+ * ([primefaces/primeng#14095](https://github.com/primefaces/primeng/issues/14095),
+ * [primefaces/primeng#16474](https://github.com/primefaces/primeng/issues/16474)).
+ *
+ * The rule writes from the form's side twice and reads `dirty()` after each:
+ * once by rendering, which hands the control the value the fixture started the
+ * field with, and once through the field's `value.set`, which is what a load or
+ * a patch does. Only a DIFFERENT value written back can dirty the field, since a
+ * model emits only when its value changes, so the rule passes a control that
+ * adjusts nothing and one that adjusts only what it shows. It does not judge
+ * whether an adjustment is wanted, only that it is not recorded as an edit.
+ *
  * ## What it checks
  *
  * Six rules are read off the runtime directive definitions, which is where
  * Angular reads them: a `value` or `checked` `model()`, exactly one of the two,
  * no `ControlValueAccessor` competing for the binding, and inputs named
- * `disabled` and `readonly` beside an output named `touch`. Three more are
- * driven through the bound field: the value must cross in both directions,
- * `touch` must actually mark the field touched, and asking the field to focus
- * its control must leave focus on the host element or inside it.
+ * `disabled` and `readonly` beside an output named `touch`. Four more are
+ * driven through the bound field: a value the form writes must leave the field
+ * pristine, the value must cross in both directions, `touch` must actually mark
+ * the field touched, and asking the field to focus its control must leave focus
+ * on the host element or inside it.
  *
  * Every name is matched as Angular matches it — by the PUBLIC binding name, not
  * the class property. `value = model('', { alias: 'val' })` is a control
@@ -241,6 +282,22 @@ export interface SignalFormsControlOptions {
  * own panel passes this and is broken. That needs the control's own
  * interactions and belongs in the control's own spec.
  *
+ * **The pristine rule sees an adjustment only when the value written needs
+ * one.** It writes the fixture's starting value and the first probe value, and
+ * nothing else. The default probe is an anonymous object, which is never out of
+ * range, so an in-range start and the default `values` never put a clamp to
+ * work: a control that clamps into its model with a comparison passes, and one
+ * whose clamp turns an object into `NaN` fails as a conversion, which in-range
+ * `values` then make pass. Start the fixture's field out of range, or pass
+ * `values` whose first value is, and the clamp has to show itself. The same
+ * goes for a control that normalises only some values — whitespace, case, a
+ * date's time of day: it is caught by a start or a first value it would change.
+ *
+ * It also takes the fixture at its word. Nothing but the control is supposed to
+ * write to the field before the assertion does, so a field that is dirty after
+ * the first render is reported against the control — and a test that dirtied
+ * the field itself before handing it over gets the same report.
+ *
  * **The focus rule proves focus arrived, not that it arrived somewhere
  * useful.** jsdom has no layout, so it cannot tell a visible target from one
  * nobody can see: a target clipped to nothing, moved off-screen, zero-sized or
@@ -264,12 +321,13 @@ export interface SignalFormsControlOptions {
  * The value is written twice, the field is marked touched and focus is moved
  * into the control, with no attempt to put any of it back: a restore that
  * silently failed would leave a later assertion reading a value this function
- * chose. Give it a fixture of its own, attached to the document the way
- * `TestBed.createComponent` attaches it — nothing detached can take focus —
- * and bound to a field the schema leaves interactive: Signal Forms reads
- * `touched` as false on a hidden, disabled or read-only field whatever has been
- * marked, so the touch rule refuses such a fixture rather than blaming the
- * control for it.
+ * chose. Give it a fixture of its own: fresh, since a field that is already
+ * dirty is read as the control's doing; attached to the document the way
+ * `TestBed.createComponent` attaches it, since nothing detached can take focus;
+ * and bound to a field the schema leaves interactive. Signal Forms reads
+ * `dirty` and `touched` as false on a hidden, disabled or read-only field
+ * whatever has been written or marked, so the pristine and touch rules refuse
+ * such a fixture rather than vouch for the control or blame it.
  *
  * @throws {SignalFormsControlError} naming the first rule that broke. First
  *   rather than all of them, because the later rules cannot be evaluated until
@@ -380,36 +438,43 @@ export async function assertSignalFormsControl<T>(
       'and still submits, which is the whole difference between the two.',
   );
 
-  // 7. The value crosses in both directions.
+  // 7. A value the form writes leaves a pristine field pristine.
+  const state = control.formField.state();
+  const { inbound, outbound, source } = probeValues(kind, state.controlValue(), options.values);
+  await requireWriteKeepsPristine(fixture, control, state, inbound, source);
+
+  // 8. The value crosses in both directions.
   //
   // What this proves that reading the definitions does not: that the model
   // resolved from them is the model Angular CONNECTED. The resolution mirrors
   // Angular's through private fields that can move between minors, and this is
-  // where a drift shows rather than passing. It also catches a control that
-  // alters the value on the way through, which each message says how to tell
-  // apart from a real defect.
+  // where a drift shows rather than passing.
   //
-  // `controlValue` rather than `value`, because `controlValue` is the signal the
-  // binding reads and writes. On a plain field the two are the same; under
-  // `transformedValue` they are not, and comparing against `value` would report
-  // a working control as broken for doing exactly what the schema asked.
-  const state = control.formField.state();
-  const [inbound, outbound] = probeValues(kind, state.controlValue(), options.values);
-
-  state.controlValue.set(inbound);
-  await flush(fixture);
+  // The inbound half is judged on the write rule 7 has just made, and is the
+  // other half of what makes that rule's pass mean anything: a write that never
+  // reached the model leaves the field pristine too, because nothing came back
+  // to dirty it. A control that changes the value on the way in and reports the
+  // change has already failed rule 7, so what is left to find here is a model
+  // the write did not reach.
   if (!Object.is(model(), inbound)) {
     throw new SignalFormsControlError(
       'value-round-trip',
       control.label,
-      `The field wrote ${show(inbound)} and ${control.name}'s \`${binding.publicName}\` reports ${show(model())}.\n\n` +
-        'Either the inbound half of the binding is not connected — the model resolved from the\n' +
-        'definitions is not the one Angular bound — or the control alters the value on the way in.\n\n' +
-        'If it normalises on purpose, pass `values` with two values it accepts: the default\n' +
-        'probes are anonymous objects, and a control that coerces will rightly refuse them.',
+      `The form wrote ${show(inbound)}, the field is still pristine, and ${control.name}'s \`${binding.publicName}\`\n` +
+        `reports ${show(model())}.\n\n` +
+        'Had the control changed the value and reported the change, the field would be dirty.\n' +
+        'Nothing came back, so either the inbound half of the binding is not connected — the\n' +
+        'model resolved from the definitions is not the one Angular bound — or the control\n' +
+        'changed its value and the change never reached the field, which leaves the two\n' +
+        'disagreeing about what the form holds.',
     );
   }
 
+  // The outbound half reads `controlValue` rather than `value`, because
+  // `controlValue` is the signal the binding reads and writes. On a plain field
+  // the two are the same; under `transformedValue` they are not, and comparing
+  // against `value` would report a working control as broken for doing exactly
+  // what the schema asked.
   model.set(outbound);
   await flush(fixture);
   if (!Object.is(state.controlValue(), outbound)) {
@@ -428,7 +493,7 @@ export async function assertSignalFormsControl<T>(
     );
   }
 
-  // 8. `touch` reaches the field. After the round trip, because it cannot be
+  // 9. `touch` reaches the field. After the round trip, because it cannot be
   // undone.
   //
   // Two states of the FIELD make this unanswerable, and each is refused rather
@@ -436,8 +501,10 @@ export async function assertSignalFormsControl<T>(
   // that already is. `markAsTouched` still records the touch on a hidden,
   // disabled or read-only field, but `touched` masks it with the field's
   // `isNonInteractive` and reads false there, so a probe on one fails for a
-  // wired control exactly as for an unwired one.
-  const inert = (['hidden', 'disabled', 'readonly'] as const).filter(name => state[name]());
+  // wired control exactly as for an unwired one. Rule 7 has refused such a
+  // field already, and asks again here because a schema that reads the value
+  // can make one out of the value the round trip has just written.
+  const inert = nonInteractive(state);
   if (inert.length > 0) {
     throw new SignalFormsControlError(
       'touch-marks-touched',
@@ -476,14 +543,141 @@ export async function assertSignalFormsControl<T>(
     );
   }
 
-  // 9. Focus reaches the control. After `touch`, because moving focus in and
+  // 10. Focus reaches the control. After `touch`, because moving focus in and
   // out of a control is exactly what makes a conforming one emit `touch`, and
   // the touch rule needs a field nobody has touched yet.
   await requireFocusReachesControl(fixture, control, node);
 }
 
 /**
- * Rule 9: ask the field to focus its control, and look at where focus went.
+ * Rule 7: write from the form's side, and look at whether the field calls it an
+ * edit.
+ *
+ * Twice. The first render is a form-side write already — Angular hands the
+ * control the value the field starts with — so a control that adjusts what it
+ * is handed has done it by the time the assertion looks, and the field is
+ * dirty. Then the first probe value goes in through the field's own
+ * `value.set`, which is what a load or a patch does. `controlValue.set` would
+ * not do here: it is the call Angular makes when the CONTROL reports a value,
+ * and it marks the field dirty itself, whoever calls it.
+ *
+ * Neither read can pass for the wrong reason without the next rule failing.
+ * When the probe equals the value the field started with, the write changes
+ * nothing, and the render has already put that value to the control. When the
+ * write does not reach the model at all, the field stays pristine because
+ * nothing came back, and the round trip, judged on this same write, fails on
+ * the line after.
+ *
+ * What can make a read meaningless is the schema. `dirty` is masked by the
+ * field's `isNonInteractive` exactly as `touched` is, so on a hidden, disabled
+ * or read-only field it reads false whatever the control wrote back, and a pass
+ * there would vouch for any control at all. The field is asked again after the
+ * probe write, because a schema that reads the value can turn the field
+ * read-only for the very value the probe wrote.
+ */
+async function requireWriteKeepsPristine<T>(
+  fixture: ComponentFixture<T>,
+  control: LocatedControl,
+  state: FieldState<unknown>,
+  probe: unknown,
+  source: ProbeSource,
+): Promise<void> {
+  refuseNonInteractive(state, control, '');
+  if (state.dirty()) {
+    throw new SignalFormsControlError(
+      'write-keeps-pristine',
+      control.label,
+      `${control.name} has been rendered once and nothing has edited it, and the field is already\n` +
+        `dirty, holding ${show(state.controlValue())}.\n\n` +
+        "The first render is a write from the form's side: Signal Forms hands the control the\n" +
+        'value the field starts with, and a field nobody has edited is dirty only when a value\n' +
+        `came back.\n\n${WRITTEN_BACK}\n\n` +
+        `${FIX_THE_DISPLAY}\n\n` +
+        'The value is the one the fixture started the field with. A control converting a value\n' +
+        'no form would ever hold for it — a number started in a text control — is a false\n' +
+        'failure: start the field at a value the control is built for. A value outside its range\n' +
+        'is not one of those, because forms load those, and they are what this rule is for. And\n' +
+        'a test that wrote to the field before handing the fixture over reads exactly like this.',
+    );
+  }
+
+  state.value.set(probe);
+  await flush(fixture);
+  refuseNonInteractive(state, control, ` once the form has written ${show(probe)} into it`);
+  if (state.dirty()) {
+    throw new SignalFormsControlError(
+      'write-keeps-pristine',
+      control.label,
+      `The form wrote ${show(probe)} into the pristine field, the way a load or a patch writes, and\n` +
+        `${control.name} reported ${show(state.controlValue())} back: the field now holds that and is dirty.\n\n` +
+        `${WRITTEN_BACK}\n\n` +
+        FIX_THE_DISPLAY +
+        PROBE_HINT[source],
+    );
+  }
+}
+
+/**
+ * Where the value rule 7 wrote came from, which decides the one piece of advice
+ * that differs: an anonymous object is ngtrue's choice and a false failure for
+ * a control that converts, `values` is the caller's, and a flipped boolean is
+ * nothing a checkbox has any business adjusting.
+ */
+const PROBE_HINT: Readonly<Record<ProbeSource, string>> = {
+  anonymous:
+    "\n\nThe value written was ngtrue's default probe, an anonymous object. A control that\n" +
+    'converts what it is given on purpose will rightly change that, and no form will ever\n' +
+    'hand it one: pass `values` whose first value is one the control keeps as written. If\n' +
+    'it clamps, make that value one outside its range: a control that leaves its model alone\n' +
+    'keeps that as written too, and forms load those.',
+  supplied:
+    '\n\nThe value written is the first of `values`. If the control converts it on purpose,\n' +
+    'because no form would ever hold that value for this control, pass a first value one\n' +
+    "would. A value outside the control's range is not one of those: forms load those.",
+  flipped: '',
+};
+
+/** What a control that adjusts what it was handed does to a form, said once for both reads of rule 7. */
+const WRITTEN_BACK =
+  "Signal Forms records every value a control reports through its model as the user's\n" +
+  'edit, so a control that adjusts what it was handed and writes the adjustment back —\n' +
+  'normalising it, `null` to an empty string; clamping it into range; filling a `null` in\n' +
+  'with a default — marks the field dirty before anyone has touched it. An unsaved-changes\n' +
+  'guard then fires on a page nobody edited, and the value the form loaded is silently\n' +
+  'replaced.';
+
+/** The fix, which is the same for both reads of rule 7. */
+const FIX_THE_DISPLAY =
+  'Adjust what the control SHOWS and leave the model alone: clamp the display, render a\n' +
+  '`null` as an empty input, and write the model only on the paths a user drives. Whether\n' +
+  "the value is acceptable is a validator's to say — `max()` on the schema reports the\n" +
+  'out-of-range value that a clamp written back would have deleted.';
+
+/**
+ * The refusal rule 7 makes before each read of `dirty`, when the schema has
+ * made the field one on which `dirty` cannot be anything but false.
+ */
+function refuseNonInteractive(state: FieldState<unknown>, control: LocatedControl, moment: string): void {
+  const inert = nonInteractive(state);
+  if (inert.length === 0) return;
+  throw new SignalFormsControlError(
+    'write-keeps-pristine',
+    control.label,
+    `The bound field is ${inert.join(' and ')}${moment}, so it cannot be dirty:\n` +
+      'Signal Forms reads `dirty` as false on a hidden, disabled or read-only field, whatever\n' +
+      'the control writes back, and `touched` the same way. A pass here would vouch for any\n' +
+      'control at all, so there is no answer rather than that one.\n\n' +
+      'Bind the control to a field the schema leaves interactive, in a fixture of its own.',
+  );
+}
+
+/** The states of the field that mask `dirty` and `touched`, as `isNonInteractive` in Signal Forms reads them. */
+function nonInteractive(state: FieldState<unknown>): readonly ('hidden' | 'disabled' | 'readonly')[] {
+  return (['hidden', 'disabled', 'readonly'] as const).filter(name => state[name]());
+}
+
+/**
+ * Rule 10: ask the field to focus its control, and look at where focus went.
  *
  * It calls `focus()` on the candidate's own `FormField`, which is the call
  * `focusBoundControl()` ends in — the field state picks its first binding in
@@ -1120,14 +1314,19 @@ function unexposed(
   );
 }
 
+/** The caller's `values`, the field's boolean flipped, or two anonymous objects. */
+type ProbeSource = 'supplied' | 'flipped' | 'anonymous';
+
 function probeValues(
   kind: ModelKind,
   current: unknown,
   supplied: readonly [unknown, unknown] | undefined,
-): readonly [unknown, unknown] {
-  if (supplied !== undefined) return supplied;
-  if (kind === 'checked' || typeof current === 'boolean') return [!current, current];
-  return [{ ngtrue: 'probe-a' }, { ngtrue: 'probe-b' }];
+): { readonly inbound: unknown; readonly outbound: unknown; readonly source: ProbeSource } {
+  if (supplied !== undefined) return { inbound: supplied[0], outbound: supplied[1], source: 'supplied' };
+  if (kind === 'checked' || typeof current === 'boolean') {
+    return { inbound: !current, outbound: current, source: 'flipped' };
+  }
+  return { inbound: { ngtrue: 'probe-a' }, outbound: { ngtrue: 'probe-b' }, source: 'anonymous' };
 }
 
 function blur(element: Element | null): void {
