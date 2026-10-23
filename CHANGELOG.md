@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.3.0](https://github.com/thekhegay/ngtrue/compare/v0.2.0...v0.3.0) (2026-10-23)
+
+### ⚠ BREAKING CHANGES
+
+* assertSignalFormsControl requires a form-side write to leave the field pristine
+
+### Features
+
+* assertSignalFormsControl requires a form-side write to leave the field pristine ([d94e37e](https://github.com/thekhegay/ngtrue/commit/d94e37e6340569a90655443807623b870b01fb9a))
+* **node:** add an ignore list to unresolvableTypes ([b00e3c6](https://github.com/thekhegay/ngtrue/commit/b00e3c6fab20622dc47af4df4d69e31a82a97eda))
+* **node:** read base classes and host directives from installed dependencies ([978da0d](https://github.com/thekhegay/ngtrue/commit/978da0dd69a4a498779287994520f478091dee47))
+* **node:** report entry points a test runner or a server cannot import ([72e4e1b](https://github.com/thekhegay/ngtrue/commit/72e4e1b75e44a121bf6c2078145b1e0bc935b97f))
+* **testing:** report subscriptions to zone events a zoneless app never emits ([71a8411](https://github.com/thekhegay/ngtrue/commit/71a841149bd5cf7f3fc6df143e4b8c1f293e1bed))
+
+### Bug Fixes
+
+* **node:** follow bases through the standard decorator wrapper and stop blaming full mode ([8b83c03](https://github.com/thekhegay/ngtrue/commit/8b83c039b5654f88d96776398814e283941642c8))
+* **node:** skip the same stylesheet conditions in unresolvableTypes as in unexportedTypes ([fd3a901](https://github.com/thekhegay/ngtrue/commit/fd3a901c8fafca6556bee712f1a8d59509113d1a))
+
 ## [0.2.0](https://github.com/thekhegay/ngtrue/compare/v0.1.1...v0.2.0) (2026-10-12)
 
 ### ⚠ BREAKING CHANGES
