@@ -12,6 +12,7 @@ what stops it drifting into a bag of utilities. The questions ngtrue answers are
 questions you only have when other people install your code:
 
 - Is this control really wired to Signal Forms, or does it only look wired?
+- Does any path of this component wait for a zone event a zoneless app never fires?
 - Does the manifest describe the files the build actually produced?
 - Will the types resolve for a consumer whose `tsconfig.json` is not yours?
 - Will `ng add` and `ng update` load the schematics you ship?
@@ -29,7 +30,7 @@ reason. [The three entry points](/entry-points) explains it, including the one
 rule the package is built around: **no export may import another export.**
 
 ```ts
-import { assertSignalFormsControl } from 'ngtrue/testing';
+import { assertNoZoneEventWaits, assertSignalFormsControl } from 'ngtrue/testing';
 import {
   angularPeerFloorsTooLow,
   globalAttributeInputs,
@@ -47,6 +48,7 @@ import {
 | Export                                                           | Entry point      | Answers                                                      |
 | ---------------------------------------------------------------- | ---------------- | ------------------------------------------------------------ |
 | [`assertSignalFormsControl`](/guide/assert-signal-forms-control) | `ngtrue/testing` | Is this custom control correctly wired to Signal Forms?      |
+| [`assertNoZoneEventWaits`](/guide/assert-no-zone-event-waits)    | `ngtrue/testing` | Does it wait for a zone event a zoneless app never emits?    |
 | [`unresolvedExports`](/guide/unresolved-exports)                 | `ngtrue/node`    | Does every advertised subpath resolve to a file that exists? |
 | [`unresolvableTypes`](/guide/unresolvable-types)                 | `ngtrue/node`    | Do the types resolve under node16 and under bundler?         |
 | [`unexportedTypes`](/guide/unexported-types)                     | `ngtrue/node`    | Can a consumer import every type a public signature names?   |

@@ -13,10 +13,13 @@ would put the test harness on a path an application build can follow.
 ## Classes
 
 - [SignalFormsControlError](classes/SignalFormsControlError.md)
+- [ZoneEventWaitError](classes/ZoneEventWaitError.md)
 
 ## Interfaces
 
 - [SignalFormsControlOptions](interfaces/SignalFormsControlOptions.md)
+- [ZoneEventWait](interfaces/ZoneEventWait.md)
+- [ZoneEventWaitOptions](interfaces/ZoneEventWaitOptions.md)
 
 ## Type Aliases
 
@@ -25,3 +28,4 @@ would put the test harness on a path an application build can follow.
 ## Functions
 
 - [assertSignalFormsControl](functions/assertSignalFormsControl.md)
+- [assertNoZoneEventWaits](functions/assertNoZoneEventWaits.md)

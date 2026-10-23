@@ -21,6 +21,7 @@ People who **ship** Angular libraries. Not application developers. The questions
 here are the ones you only have when other people install your code:
 
 - Is this control really wired to Signal Forms, or does it only look wired?
+- Does any path of this component wait for a zone event a zoneless app never fires?
 - Does the manifest describe the files the build actually produced?
 - Will the types resolve for a consumer whose `tsconfig.json` is not yours?
 - Will `ng add` and `ng update` load the schematics you ship?
@@ -41,11 +42,11 @@ one entry point, and the entry point that does not need them works without them.
 Split by the environment the code runs in, the same way `@angular/core` and
 `@angular/core/testing` are split.
 
-| Subpath          | Runs in                   | Holds                              |
-| ---------------- | ------------------------- | ---------------------------------- |
-| `ngtrue`         | an application, in theory | nothing yet, on purpose            |
-| `ngtrue/testing` | a test run                | the Signal Forms conformance suite |
-| `ngtrue/node`    | a build or a script       | the packaging checks               |
+| Subpath          | Runs in                   | Holds                                                       |
+| ---------------- | ------------------------- | ----------------------------------------------------------- |
+| `ngtrue`         | an application, in theory | nothing yet, on purpose                                     |
+| `ngtrue/testing` | a test run                | the Signal Forms conformance suite, the zoneless wait check |
+| `ngtrue/node`    | a build or a script       | the packaging checks                                        |
 
 **No export may import another export.** That is the mistake that made lodash
 untreeshakable, and here it would also drag `@angular/core/testing` or `node:fs`
@@ -67,6 +68,22 @@ than the line that noticed. It is stricter than `FormValueControl` deliberately:
 Angular makes `disabled`, `readonly` and `touch` optional, and a control that
 omits them binds and renders while the schema rules that reach for them
 evaporate in silence.
+
+```ts
+import { assertNoZoneEventWaits } from 'ngtrue/testing';
+
+it('waits for nothing a zoneless app never emits', async () => {
+  await assertNoZoneEventWaits(() => TestBed.createComponent(MyTooltip), {
+    act: fixture => fixture.nativeElement.dispatchEvent(new MouseEvent('mouseenter')),
+  });
+});
+```
+
+Zoneless is the default for new applications since Angular 21, and its `NgZone`
+never emits `onStable` or `onMicrotaskEmpty`. A component that subscribes to
+either compiles, renders and passes its zone.js tests, and the work behind the
+subscription never runs. This fails naming the event and the line that
+subscribed.
 
 ## `ngtrue/node`
 
