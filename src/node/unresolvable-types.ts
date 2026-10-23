@@ -9,7 +9,11 @@ import { loadTypeScript, stageProbe, type TypeScript } from './probe.js';
 /** @since 0.1.0 */
 export type ResolutionMode = 'node16' | 'bundler';
 
-/** Options for {@link unresolvableTypes}. */
+/**
+ * Options for {@link unresolvableTypes}.
+ *
+ * @since 0.1.0
+ */
 export interface UnresolvableTypesOptions {
   /** The directory holding the `package.json` to check — the BUILT package. */
   readonly packageDir: string;

@@ -40,3 +40,6 @@ An export earns its place when someone filed the question or when it is the
 third time the same helper is written by hand in a real library. A utility that
 might be useful does not qualify - that is how a focused package becomes a
 grab bag nobody can review.
+
+Tag it `@since` with the version it will first ship in, and export it from its
+entry point's `index.ts`. A test fails when the two disagree.

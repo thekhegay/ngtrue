@@ -236,6 +236,16 @@ page, so **write the reasoning in the JSDoc** and let the guide page carry the
 runnable example and the prose. A rule stated only in `docs/` is a rule the next
 person editing the function will not see.
 
+**`@since` is what makes a declaration public.** Every name a barrel exports
+carries one, with the version it first shipped in, in the last JSDoc block
+before the declaration — the only block the compiler and typedoc read tags
+from. A helper exported for a sibling module carries none.
+`src/entry-points.spec.ts` holds the tagged names and each barrel's exports
+equal, and loads each barrel to see that every value it exports is there at run
+time. typedoc documents the barrels and nothing else, so without that spec a
+check tagged and then left out of `index.ts` never reaches the reference, and
+`docs:check` compares an absent page with an absent page and passes.
+
 ## Style
 
 Explain WHY at the point the question comes up. A comment that restates the code
