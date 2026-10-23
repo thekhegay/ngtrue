@@ -40,7 +40,11 @@ export class SignalFormsControlError extends Error {
   }
 }
 
-/** Options for {@link assertSignalFormsControl}. */
+/**
+ * Options for {@link assertSignalFormsControl}.
+ *
+ * @since 0.1.0
+ */
 export interface SignalFormsControlOptions {
   /**
    * CSS selector for the element carrying `[formField]`, when the fixture binds

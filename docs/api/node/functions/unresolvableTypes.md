@@ -4,7 +4,7 @@
 
 > **unresolvableTypes**(`options`): `Promise`\<readonly `string`[]\>
 
-Defined in: [src/node/unresolvable-types.ts:139](https://github.com/thekhegay/ngtrue/blob/main/src/node/unresolvable-types.ts#L139)
+Defined in: [src/node/unresolvable-types.ts:143](https://github.com/thekhegay/ngtrue/blob/main/src/node/unresolvable-types.ts#L143)
 
 Every subpath whose TYPES do not resolve, under each mode, as one sentence
 each. An empty array is a pass.
