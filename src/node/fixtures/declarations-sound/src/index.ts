@@ -3,6 +3,8 @@
  * a different route `globalAttributeInputs` has to follow to see it.
  */
 import { Component, input } from '@angular/core';
+import { FixtureCdkTitled } from '@fixture/cdk';
+import { FixtureCdkScrollable } from '@fixture/cdk/scrolling';
 import { FixtureLabelled } from 'fixture-declarations-sound/core';
 
 import { FixtureTipped, FixtureTitled } from './titled.js';
@@ -53,6 +55,17 @@ export class FixtureTip {}
  */
 @Component({ selector: 'fixture-icon', template: '<ng-content />', hostDirectives: [FixtureTipped] })
 export class FixtureIcon {}
+
+/** Inherits `title` from a base in an installed dependency, and that base binds the attribute away. */
+@Component({ selector: 'fixture-caption', template: '{{ title() }}' })
+export class FixtureCaption extends FixtureCdkTitled {}
+
+/**
+ * Carries a host directive from an installed dependency that exposes nothing
+ * and applies none of its own: ngwr's sortable item over `CdkDrag`.
+ */
+@Component({ selector: 'fixture-viewport', template: '<ng-content />', hostDirectives: [FixtureCdkScrollable] })
+export class FixtureViewport {}
 
 /** On a native `<button>`, whose own `title` is the consumer's to want: out of scope by design. */
 @Component({ selector: 'button[fixture-button]', template: '<ng-content />' })

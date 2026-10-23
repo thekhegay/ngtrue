@@ -1,11 +1,14 @@
 /**
  * Components whose global-attribute inputs DO leak onto their host, one route
- * per class, plus the two base classes the check cannot see through and must
- * say so.
+ * per class, plus the bases and host directives the check cannot see through
+ * and must say so.
  */
-import { NgClass, NgStyle } from '@angular/common';
 import { Component, Directive, input } from '@angular/core';
+import { FixtureCdkDisableable, FixtureCdkHasTooltip, FixtureCdkHeading } from '@fixture/cdk';
 import { FixtureControl } from '@fixture/declarations-broken/core';
+import { FixtureFullHeading } from '@fixture/full';
+import { FixtureCdkTooltip } from '@fixture/missing';
+import { FixtureCdkScrollable } from '@fixture/missing/scrolling';
 
 import { FixtureCollapsible } from './collapsible.js';
 import { FixtureHasTooltip, FixtureTooltipped } from './tooltip.js';
@@ -64,11 +67,14 @@ export class FixtureSized extends withSize(FixtureControl) {}
 })
 export class FixtureSection {}
 
-/** Exposes a host directive from ANOTHER package as `title`. The alias is visible here; its host bindings are not. */
+/**
+ * Exposes a host directive from a package that is NOT installed as `title`.
+ * The alias is visible here; the directive's host bindings are not.
+ */
 @Component({
   selector: 'fixture-badge',
   template: '<ng-content />',
-  hostDirectives: [{ directive: NgClass, inputs: ['ngClass: title'] }],
+  hostDirectives: [{ directive: FixtureCdkTooltip, inputs: ['text: title'] }],
 })
 export class FixtureBadge {}
 
@@ -84,11 +90,11 @@ export class FixtureIconButton {}
 export class FixtureLink extends FixtureTooltipped {}
 
 /**
- * A host directive from ANOTHER package that exposes nothing here. Its own host
- * directives would land on this host under names only its package declares,
- * and those cannot be read from this one.
+ * A host directive from a package that is NOT installed, exposing nothing here.
+ * Its own host directives would land on this host under names only its package
+ * declares, and there is no package to read them from.
  */
-@Component({ selector: 'fixture-chip', template: '<ng-content />', hostDirectives: [NgClass] })
+@Component({ selector: 'fixture-chip', template: '<ng-content />', hostDirectives: [FixtureCdkScrollable] })
 export class FixtureChip {}
 
 /** A directive on a custom element leaks exactly as a component does. */
@@ -98,10 +104,33 @@ export class FixtureTab {
 }
 
 /**
- * Extends a class from another package. Every input of `NgStyle` is this
- * component's and none can be read here — while its own `title` still can.
+ * Extends a class from a package that is NOT installed. Every input of its base
+ * is this component's and none can be read — while its own `title` still can.
  */
 @Component({ selector: 'fixture-styled', template: '<ng-content />' })
-export class FixtureStyled extends NgStyle {
+export class FixtureStyled extends FixtureCdkScrollable {
   readonly title = input('');
 }
+
+/** Inherits `title` from a base in an INSTALLED dependency, and nothing binds it: the leak is this component's. */
+@Component({ selector: 'fixture-headline', template: '<h2>{{ title() }}</h2>' })
+export class FixtureHeadline extends FixtureCdkHeading {}
+
+/** Extends a mixin call an installed dependency exports, which no reading of that package can follow to a class. */
+@Component({ selector: 'fixture-legacy', template: '<ng-content />' })
+export class FixtureLegacy extends FixtureCdkDisableable {}
+
+/**
+ * FixtureHeadline's leak, from a dependency compiled in full mode: the base is
+ * a class with a definition the check cannot read, not a plain class it may
+ * walk through.
+ */
+@Component({ selector: 'fixture-banner', template: '<h2>{{ title() }}</h2>' })
+export class FixtureBanner extends FixtureFullHeading {}
+
+/**
+ * Carries a host directive from an installed dependency that applies one of its
+ * own and exposes it as `title`, a name only that package declares.
+ */
+@Component({ selector: 'fixture-help', template: '<ng-content />', hostDirectives: [FixtureCdkHasTooltip] })
+export class FixtureHelp {}

@@ -1,7 +1,13 @@
 import { resolve } from 'node:path';
 
 import { exportTargets, readManifest } from './manifest.js';
-import { PartialDeclarationReader, type HostDirectiveUse, type PartialDeclaration } from './partial-declarations.js';
+import {
+  InstalledPackages,
+  PartialDeclarationReader,
+  type HostDirectiveUse,
+  type Located,
+  type PartialDeclaration,
+} from './partial-declarations.js';
 import { loadTypeScript } from './probe.js';
 
 /** Options for {@link globalAttributeInputs}. */
@@ -10,7 +16,10 @@ export interface GlobalAttributeInputsOptions {
   /**
    * The directory holding the `package.json` to check — the BUILT package, the
    * one that would be packed. The check reads the partial declarations in the
-   * JavaScript it ships, so a source tree has nothing for it to read.
+   * JavaScript it ships, so a source tree has nothing for it to read. Its
+   * dependencies are read from the `node_modules` above it, so point it at a
+   * build that sits where they are installed, as a `dist/` in the repository
+   * that built it does.
    */
   readonly packageDir: string;
   /**
@@ -19,9 +28,9 @@ export interface GlobalAttributeInputsOptions {
    * `"WrFoo.title"` accepts one input: the component means the native attribute
    * to stay, or removes it in code where this check cannot see. A bare
    * `"WrFoo"` accepts that WrFoo could not be checked completely — it extends a
-   * class from another package, or carries a host directive from one — and does
-   * NOT silence its input findings, which keep being reported until each is
-   * listed by name.
+   * class, or carries a host directive, from a package that is not installed or
+   * in a form the check cannot follow — and does NOT silence its input findings,
+   * which keep being reported until each is listed by name.
    *
    * An entry that matches nothing is reported too, so the list cannot outlive
    * the code it excuses.
@@ -118,8 +127,17 @@ const NOT_ELEMENTS = new Set(['ng-template', 'ng-container', 'ng-content']);
  *   Angular applies to the same element under the names the middle declaration
  *   gives them, at any depth; and every host binding along the way;
  * - everything a base class contributes — inputs, host bindings, host
- *   directives — when the base is in this package, followed through its own
- *   `extends` in turn, across files and across entry points.
+ *   directives — followed through its own `extends` in turn, across files,
+ *   entry points and packages.
+ *
+ * A base class or a host directive from another package is read from that
+ * package as installed: found in the `node_modules` directories above the
+ * package, the way Node resolves the import — from the real path, so a pnpm
+ * store is searched where Node searches it — and read the same way as this
+ * one. Material's components extend CDK classes that bring inputs and host
+ * bindings of their own, and ngwr's sortable item carries `CdkDrag`; neither is
+ * answerable without reading `@angular/cdk`. A finding that runs through such a
+ * class names the package and the version that was read.
  *
  * A base TypeScript holds in a local is followed through it. A class with a
  * member that carries a standard (TC39) decorator is emitted inside a function,
@@ -206,20 +224,31 @@ const NOT_ELEMENTS = new Set(['ng-template', 'ng-container', 'ng-content']);
  * want. Such declarations are skipped. One that names a custom element anywhere
  * in its selector list is checked, directive or component alike.
  *
- * **A base class from another package is REPORTED, not passed.** Its inputs
- * become the subclass's own, and they cannot be read from here, so the class is
- * named as not fully checked. The same goes for a base the reader cannot follow
- * to a class — a mixin call, say.
+ * **A base class from a package that is not installed is REPORTED, not
+ * passed.** Its inputs become the subclass's own, and with no `node_modules`
+ * above the package holding it there is nothing to read them from, so the class
+ * is named as not fully checked. The same goes for a base the reader cannot
+ * follow to a class — a mixin call, say — in this package or an installed one,
+ * and for a base an installed package ships compiled in full mode: its
+ * definition is code for the runtime rather than a declaration to read, and
+ * walking through it as a plain class would pass every input it declares.
  *
- * **A host directive from another package is REPORTED, and its aliases are
- * still checked.** The names a host exposes from it are written in the host's
- * own declaration, so a directive from elsewhere exposed as `title` is found
- * like any other; its host bindings cannot be read, so that finding may
- * describe an attribute the directive already removes, and says so. What
+ * **A host directive from a package that is not installed is REPORTED, and its
+ * aliases are still checked.** The names a host exposes from it are written in
+ * the host's own declaration, so a directive from elsewhere exposed as `title`
+ * is found like any other; its host bindings cannot be read, so that finding
+ * may describe an attribute the directive already removes, and says so. What
  * cannot be read at all is the directive's OWN `hostDirectives`: Angular applies
  * those to this host as well, under names only that package declares, so a
  * static attribute can reach an input nobody in this package named. A host
  * directive the reader cannot follow to a declaration is reported the same way.
+ *
+ * **The installed version, not the range.** A dependency is read as it is
+ * installed where the check runs. A range such as `^22.0.0` admits releases
+ * this did not read, and one in which a base gains a global-attribute input or
+ * drops a host binding changes the answer with no change to this package. The
+ * finding names the version for that reason; run the check again when the
+ * dependency moves.
  *
  * **Full compilation.** An application build emits `ɵɵdefineComponent`, which
  * this does not read. A package with no partial declaration on a custom element
@@ -263,7 +292,7 @@ export async function globalAttributeInputs(options: GlobalAttributeInputsOption
 
   if (checked.length === 0) return [nothingChecked(modules.length, declarations)];
 
-  const surfaces = new SurfaceReader(reader);
+  const surfaces = new SurfaceReader(reader, new InstalledPackages(ts));
   const findings = new Map<string, string[]>();
   const report = (key: string, message: string): void => {
     const list = findings.get(key) ?? [];
@@ -391,15 +420,18 @@ interface MutableSurface {
 const EMPTY: Surface = { own: [], exposed: [], bound: new Set(), gaps: [] };
 
 class SurfaceReader {
-  readonly #reader: PartialDeclarationReader;
+  readonly #root: PartialDeclarationReader;
+  readonly #installed: InstalledPackages;
   readonly #done = new Map<PartialDeclaration, Surface>();
   readonly #open = new Set<PartialDeclaration>();
 
-  constructor(reader: PartialDeclarationReader) {
-    this.#reader = reader;
+  constructor(root: PartialDeclarationReader, installed: InstalledPackages) {
+    this.#root = root;
+    this.#installed = installed;
   }
 
-  of(declaration: PartialDeclaration): Surface {
+  /** The surface of a declaration in the package `reader` reads, which is the checked one unless a base or a host directive led elsewhere. */
+  of(declaration: PartialDeclaration, reader: PartialDeclarationReader = this.#root): Surface {
     const done = this.#done.get(declaration);
     if (done !== undefined) return done;
     // A cycle is a compile error in Angular, so this only guards the reader.
@@ -420,10 +452,10 @@ class SurfaceReader {
         `the host directives in ${name}'s partial declaration are written in a form this check cannot read`,
       );
     } else {
-      for (const use of declaration.hostDirectives) this.#hostDirective(declaration, use, surface);
+      for (const use of declaration.hostDirectives) this.#hostDirective(declaration, reader, use, surface);
     }
 
-    this.#inherit(declaration, surface);
+    this.#inherit(declaration, reader, surface);
 
     this.#open.delete(declaration);
     this.#done.set(declaration, surface);
@@ -434,37 +466,60 @@ class SurfaceReader {
    * One `hostDirectives` entry: the names the host exposes from it, everything
    * it exposes from host directives of its own, and its host bindings.
    *
-   * A directive this package does not hold is REPORTED as well as checked by
-   * its aliases. The aliases are in the host's own declaration and are honest
-   * to check; what the directive's package declares — the host directives it
-   * applies to this host and the names it exposes them under — is not, and that
-   * is a route a static attribute takes as surely as the host's own inputs.
+   * A directive from another package is read from that package as installed,
+   * and REPORTED as well as checked by its aliases when it cannot be. The
+   * aliases are in the host's own declaration and are honest to check; what the
+   * directive's package declares — the host directives it applies to this host
+   * and the names it exposes them under — is a route a static attribute takes
+   * as surely as the host's own inputs.
    */
-  #hostDirective(declaration: PartialDeclaration, use: HostDirectiveUse, into: MutableSurface): void {
+  #hostDirective(
+    declaration: PartialDeclaration,
+    reader: PartialDeclarationReader,
+    use: HostDirectiveUse,
+    into: MutableSurface,
+  ): void {
     const owner = declaration.className;
-    const target = this.#reader.resolve(declaration.module, use.expression);
+    const target = this.#installed.locate(reader, declaration.module, use.expression);
 
     if (target.kind === 'class' && target.declaration !== null) {
-      const applied = this.of(target.declaration);
-      const via = ` exposed from the host directive ${target.name}`;
+      const applied = this.of(target.declaration, target.reader);
+      const name = named(target, reader);
+      const via = ` exposed from the host directive ${name}`;
       for (const exposed of use.exposed) into.exposed.push({ name: exposed, via });
       for (const input of applied.exposed) {
-        into.exposed.push({ name: input.name, via: `${input.via} through the host directive ${target.name}` });
+        into.exposed.push({ name: input.name, via: `${input.via} through the host directive ${name}` });
       }
       for (const key of applied.bound) into.bound.add(key);
       into.gaps.push(...applied.gaps);
       return;
     }
 
-    const from = target.kind === 'external' ? ` from ${target.specifier}` : '';
-    const via = ` exposed from the host directive ${target.name}${from}, whose host bindings this check could not read`;
+    const from =
+      target.kind === 'missing'
+        ? target.specifier
+        : target.kind === 'unresolved'
+          ? target.imported?.specifier
+          : undefined;
+    const via =
+      ` exposed from the host directive ${target.name}${from === undefined ? '' : ` from ${from}`}, ` +
+      'whose host bindings this check could not read';
     for (const exposed of use.exposed) into.exposed.push({ name: exposed, via });
+    if (target.kind === 'missing') {
+      into.gaps.push(
+        `${owner} uses the host directive ${target.name} from ${target.specifier}, and any host directives of ` +
+          'its own land on this host under names only that package declares — those cannot be read, because ' +
+          this.#notInstalled(target),
+      );
+      return;
+    }
+    const where =
+      target.kind === 'unresolved' && target.imported !== undefined
+        ? ` from ${target.imported.specifier}, which could not be followed to a declaration in ${target.imported.from}`
+        : ', which could not be followed to a declaration';
     into.gaps.push(
-      target.kind === 'external'
-        ? `${owner} uses the host directive ${target.name} from ${target.specifier}, and any host directives of ` +
-            'its own land on this host under names only that package declares — those cannot be read from this one'
-        : `${owner} uses the host directive ${target.name}, which could not be followed to a declaration, so ` +
-            'neither its host bindings nor any host directives of its own could be read',
+      `${owner} uses the host directive ${target.name}${where}, so neither its host bindings nor any host ` +
+        'directives of its own could be read',
     );
   }
 
@@ -473,12 +528,14 @@ class SurfaceReader {
    * with a declaration contributes its whole surface, which already includes
    * ITS bases; a plain class contributes nothing and is walked through. Host
    * directives are inherited with the rest (their feature is marked
-   * `ngInherit`), so a base's exposed inputs stay exposed in the subclass.
+   * `ngInherit`), so a base's exposed inputs stay exposed in the subclass. The
+   * walk crosses into an installed package the way the class does.
    */
-  #inherit(declaration: PartialDeclaration, into: MutableSurface): void {
+  #inherit(declaration: PartialDeclaration, reader: PartialDeclarationReader, into: MutableSurface): void {
     let node = declaration.classNode;
     let module = declaration.module;
     let owner = declaration.className;
+    let at = reader;
 
     if (node === null) {
       if (declaration.usesInheritance) {
@@ -487,24 +544,30 @@ class SurfaceReader {
       return;
     }
 
-    for (let base = this.#reader.baseOf(node); base !== undefined;) {
-      const target = this.#reader.resolve(module, base);
-      if (target.kind === 'external') {
+    for (let base = at.baseOf(node); base !== undefined;) {
+      const target = this.#installed.locate(at, module, base);
+      if (target.kind === 'missing') {
         into.gaps.push(
           `${owner} extends ${target.name} from ${target.specifier}, and a base class's inputs become its ` +
-            "subclass's own — those of a class in another package cannot be read from this one",
+            `subclass's own — those cannot be read, because ${this.#notInstalled(target)}`,
         );
         return;
       }
       if (target.kind === 'unresolved') {
-        into.gaps.push(`${owner} extends ${target.name}, which could not be followed to a class`);
+        into.gaps.push(
+          target.imported === undefined
+            ? `${owner} extends ${target.name}, which could not be followed to a class`
+            : `${owner} extends ${target.name} from ${target.imported.specifier}, which could not be followed to ` +
+                `a class in ${target.imported.from}`,
+        );
         return;
       }
       if (target.declaration !== null) {
-        const inherited = this.of(target.declaration);
+        const inherited = this.of(target.declaration, target.reader);
+        const name = named(target, reader);
         const through = (input: Reached): Reached => ({
           name: input.name,
-          via: input.via === '' ? ` inherited from ${target.name}` : `${input.via} through ${target.name}`,
+          via: input.via === '' ? ` inherited from ${name}` : `${input.via} through ${name}`,
         });
         into.own.push(...inherited.own.map(through));
         into.exposed.push(...inherited.exposed.map(through));
@@ -512,12 +575,38 @@ class SurfaceReader {
         into.gaps.push(...inherited.gaps);
         return;
       }
+      // A full-mode definition is a declaration all the same, only not one
+      // written as data. Walked through as a plain class it would contribute
+      // nothing, and every input it declares would pass unread.
+      if (target.module.fullyCompiled.has(target.node)) {
+        into.gaps.push(
+          `${owner} extends ${named(target, reader)}, which was compiled in full mode, and a base class's inputs ` +
+            "become its subclass's own — a full-mode definition is code for the runtime rather than a partial " +
+            'declaration, so they cannot be read',
+        );
+        return;
+      }
       node = target.node;
       module = target.module;
       owner = target.name;
-      base = this.#reader.baseOf(node);
+      at = target.reader;
+      base = at.baseOf(node);
     }
   }
+
+  #notInstalled(target: Extract<Located, { kind: 'missing' }>): string {
+    const above = target.searchedFrom === this.#root ? 'this package' : target.searchedFrom.label;
+    return `no node_modules above ${above} holds ${target.packageName}`;
+  }
+}
+
+/**
+ * A class as a finding names it: with the package and the version that was
+ * read when it lives in another package than the declaration being merged,
+ * because the answer holds for that release and not for the range.
+ */
+function named(target: Extract<Located, { kind: 'class' }>, from: PartialDeclarationReader): string {
+  return target.reader === from ? target.name : `${target.name} (${target.reader.label})`;
 }
 
 /**

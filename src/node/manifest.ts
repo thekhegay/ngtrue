@@ -12,6 +12,7 @@ import { join, posix, sep } from 'node:path';
  */
 export interface Manifest {
   readonly name?: unknown;
+  readonly version?: unknown;
   readonly type?: unknown;
   readonly exports?: unknown;
   readonly dependencies?: unknown;

@@ -1,9 +1,9 @@
-import { readFileSync, statSync } from 'node:fs';
-import { dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path';
+import { readFileSync, realpathSync, statSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path';
 
 import type TS from 'typescript';
 
-import { exportTargets, filesMatching, type ExportTarget, type Manifest } from './manifest.js';
+import { exportTargets, filesMatching, readManifest, type ExportTarget, type Manifest } from './manifest.js';
 
 /**
  * Reading what a published Angular library declares, from the JavaScript it
@@ -85,6 +85,12 @@ export interface ModuleRecord {
   readonly specifiers: readonly string[];
   readonly declarations: readonly PartialDeclaration[];
   readonly declarationByClass: ReadonlyMap<ClassNode, PartialDeclaration>;
+  /**
+   * Classes defined in FULL mode, by an `ɵɵdefineComponent` or
+   * `ɵɵdefineDirective` call: Angular declarations with nothing here to read,
+   * which must not be taken for plain classes.
+   */
+  readonly fullyCompiled: ReadonlySet<ClassNode>;
 }
 
 type Binding =
@@ -98,6 +104,9 @@ const DECLARE = new Map<string, PartialDeclaration['kind']>([
   ['ɵɵngDeclareComponent', 'component'],
   ['ɵɵngDeclareDirective', 'directive'],
 ]);
+
+/** What the same declarations compile to in full mode, which an application build emits. */
+const DEFINE = new Set(['ɵɵdefineComponent', 'ɵɵdefineDirective']);
 
 const JAVASCRIPT = /\.[cm]?js$/;
 
@@ -120,11 +129,20 @@ export class PartialDeclarationReader {
   readonly #targets: readonly ExportTarget[];
   readonly #modules = new Map<string, ModuleRecord>();
 
+  /** The package's name and version, for a sentence that has to say which package and which release was read. */
+  readonly label: string;
+
   constructor(ts: Ts, packageDir: string, manifest: Manifest) {
     this.#ts = ts;
     this.#packageDir = packageDir;
     this.#name = typeof manifest.name === 'string' && manifest.name.length > 0 ? manifest.name : null;
     this.#targets = exportTargets(manifest);
+    const version = typeof manifest.version === 'string' && manifest.version.length > 0 ? ` ${manifest.version}` : '';
+    this.label = `${this.#name ?? packageDir}${version}`;
+  }
+
+  get packageDir(): string {
+    return this.#packageDir;
   }
 
   /** Every module reachable from `exports`, in the order it was reached. */
@@ -181,6 +199,17 @@ export class PartialDeclarationReader {
     }
 
     return { kind: 'unresolved', name: node.getText() };
+  }
+
+  /**
+   * What this package exports as `name` from a subpath — `"."`, `"./scrolling"` —
+   * for an import that arrived from another package. Read through `exports`
+   * under every condition, as everything else here is.
+   */
+  resolveExport(subpath: string, name: string): Resolution {
+    const file = this.#subpathFile(subpath);
+    if (file === null) return { kind: 'unresolved', name };
+    return this.#findExport(this.#load(file), name, 1, new Set());
   }
 
   /** The expression in a class's `extends` clause, or `undefined` when it has none. */
@@ -335,6 +364,103 @@ export class PartialDeclarationReader {
   }
 }
 
+/** Where a name leads once installed packages are followed too. */
+export type Located =
+  | (Extract<Resolution, { kind: 'class' }> & {
+      /** The reader of the package the class is in. */
+      readonly reader: PartialDeclarationReader;
+    })
+  | {
+      readonly kind: 'unresolved';
+      readonly name: string;
+      /** Set when the name was imported from an installed package and could not be followed inside it. */
+      readonly imported?: { readonly specifier: string; readonly from: string };
+    }
+  | {
+      readonly kind: 'missing';
+      readonly name: string;
+      readonly specifier: string;
+      /** The package no `node_modules` held. */
+      readonly packageName: string;
+      /** The package whose `node_modules` were searched. */
+      readonly searchedFrom: PartialDeclarationReader;
+    };
+
+/**
+ * Names resolved across packages: one reader for each installed package a
+ * resolution leads into, found where Node would find it.
+ *
+ * Found by walking up the `node_modules` directories from the importing
+ * package, the way Node's resolver does, and not with `createRequire`, which
+ * resolves under the `require` condition and would call a package that exports
+ * only `import` missing. The walk starts from the real path of the package, so
+ * in a pnpm layout — a symlink into a store where a package's own dependencies
+ * sit beside it rather than under the project — the next package is looked for
+ * where Node looks for it.
+ */
+export class InstalledPackages {
+  readonly #ts: Ts;
+  readonly #readers = new Map<string, PartialDeclarationReader>();
+
+  constructor(ts: Ts) {
+    this.#ts = ts;
+  }
+
+  /** {@link PartialDeclarationReader.resolve}, carried on into the installed package when the name is another package's. */
+  locate(reader: PartialDeclarationReader, module: ModuleRecord, expression: TS.Expression): Located {
+    const target = reader.resolve(module, expression);
+    if (target.kind === 'class') return { ...target, reader };
+    if (target.kind === 'unresolved') return target;
+
+    let from = reader;
+    let name = target.name;
+    let specifier = target.specifier;
+    // A package can re-export a class from another, so a hop can lead to a
+    // third; the bound is a stop for a cycle no real dependency graph has.
+    for (let hop = 0; hop < MAX_DEPTH; hop += 1) {
+      const packageName = packageNameOf(specifier);
+      const installed = this.#find(from.packageDir, packageName);
+      if (installed === null) return { kind: 'missing', name, specifier, packageName, searchedFrom: from };
+      const subpath = specifier === packageName ? '.' : `./${specifier.slice(packageName.length + 1)}`;
+      const found = installed.resolveExport(subpath, name);
+      if (found.kind === 'class') return { ...found, reader: installed };
+      if (found.kind === 'unresolved') {
+        return { kind: 'unresolved', name, imported: { specifier, from: installed.label } };
+      }
+      from = installed;
+      name = found.name;
+      specifier = found.specifier;
+    }
+    return { kind: 'unresolved', name };
+  }
+
+  #find(fromDir: string, packageName: string): PartialDeclarationReader | null {
+    for (let dir = realpathSync(fromDir); ; dir = dirname(dir)) {
+      // Node never looks in `node_modules/node_modules`.
+      if (basename(dir) !== 'node_modules') {
+        const candidate = join(dir, 'node_modules', packageName);
+        if (isFile(join(candidate, 'package.json'))) return this.#reader(realpathSync(candidate));
+      }
+      if (dirname(dir) === dir) return null;
+    }
+  }
+
+  #reader(packageDir: string): PartialDeclarationReader {
+    let reader = this.#readers.get(packageDir);
+    if (reader === undefined) {
+      reader = new PartialDeclarationReader(this.#ts, packageDir, readManifest(packageDir));
+      this.#readers.set(packageDir, reader);
+    }
+    return reader;
+  }
+}
+
+/** `@scope/name` or `name`: the part of a bare specifier that names the package. */
+function packageNameOf(specifier: string): string {
+  const parts = specifier.split('/');
+  return (specifier.startsWith('@') ? parts.slice(0, 2) : parts.slice(0, 1)).join('/');
+}
+
 function parseModule(ts: Ts, path: string, file: string): ModuleRecord {
   const source = ts.createSourceFile(path, readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
 
@@ -409,6 +535,7 @@ function parseModule(ts: Ts, path: string, file: string): ModuleRecord {
   // declaration its module.
   const declarations: PartialDeclaration[] = [];
   const declarationByClass = new Map<ClassNode, PartialDeclaration>();
+  const fullyCompiled = new Set<ClassNode>();
   const record: ModuleRecord = {
     path,
     file,
@@ -419,6 +546,7 @@ function parseModule(ts: Ts, path: string, file: string): ModuleRecord {
     specifiers,
     declarations,
     declarationByClass,
+    fullyCompiled,
   };
 
   const visit = (node: TS.Node): void => {
@@ -430,6 +558,10 @@ function parseModule(ts: Ts, path: string, file: string): ModuleRecord {
         const declaration = readDeclaration(ts, kind, node, first, record);
         declarations.push(declaration);
         if (declaration.classNode !== null) declarationByClass.set(declaration.classNode, declaration);
+      }
+      if (callee !== null && DEFINE.has(callee) && first !== undefined && ts.isObjectLiteralExpression(first)) {
+        const defined = classOf(ts, node, first, record);
+        if (defined !== null) fullyCompiled.add(defined);
       }
       // A dynamic import, which is how a lazily loaded chunk is reached.
       if (node.expression.kind === ts.SyntaxKind.ImportKeyword && first !== undefined && ts.isStringLiteral(first)) {
@@ -452,22 +584,7 @@ function readDeclaration(
 ): PartialDeclaration {
   const type = property(ts, literal, 'type');
   const typeName = type !== undefined && ts.isIdentifier(type) ? type.text : null;
-
-  // The class whose static field holds the call, which is where every
-  // compiler and bundler in use puts it. A declaration assigned after the class
-  // (`Foo.ɵcmp = …`) is found through `type` instead.
-  let classNode: ClassNode | null = null;
-  for (let node: TS.Node | undefined = call.parent; node !== undefined; node = node.parent) {
-    if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) {
-      classNode = node;
-      break;
-    }
-  }
-  if (classNode === null && typeName !== null) {
-    const binding = module.locals.get(typeName);
-    if (binding?.kind === 'class') classNode = binding.node;
-  }
-
+  const classNode = classOf(ts, call, literal, module);
   const selector = property(ts, literal, 'selector');
   const usesInheritance = property(ts, literal, 'usesInheritance');
 
@@ -483,6 +600,27 @@ function readDeclaration(
     classNode,
     module,
   };
+}
+
+/**
+ * The class a declaration or definition call describes: the class whose static
+ * field holds the call, which is where every compiler and bundler in use puts
+ * it. One assigned after the class (`Foo.ɵcmp = …`) is found through `type`
+ * instead.
+ */
+function classOf(
+  ts: Ts,
+  call: TS.CallExpression,
+  literal: TS.ObjectLiteralExpression,
+  module: ModuleRecord,
+): ClassNode | null {
+  for (let node: TS.Node | undefined = call.parent; node !== undefined; node = node.parent) {
+    if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) return node;
+  }
+  const type = property(ts, literal, 'type');
+  if (type === undefined || !ts.isIdentifier(type)) return null;
+  const binding = module.locals.get(type.text);
+  return binding?.kind === 'class' ? binding.node : null;
 }
 
 /**
