@@ -269,7 +269,7 @@ export async function loadDevkit(imports: DevkitImports = DEVKIT): Promise<Schem
       const cause = error as { code?: unknown; message?: unknown };
       const detail = [cause.code, cause.message].filter(part => typeof part === 'string').join(': ');
       throw new Error(
-        `ngtrue: \`@angular-devkit/schematics\` is installed and did not load${detail === '' ? '.' : ` — ${detail}`}`,
+        `ngtrue: \`@angular-devkit/schematics\` is installed and did not load${detail === '' ? '.' : `: ${detail}`}`,
         { cause: error },
       );
     }

@@ -312,7 +312,7 @@ describe('loadDevkit', () => {
       (caught: Error) => caught,
     );
 
-    expect(error.message).toContain('did not load — ERR_PACKAGE_PATH_NOT_EXPORTED: Package subpath is not defined');
+    expect(error.message).toContain('did not load: ERR_PACKAGE_PATH_NOT_EXPORTED: Package subpath is not defined');
     expect(error.cause).toBe(failure);
     expect(fellBack).toBe(false);
   });
