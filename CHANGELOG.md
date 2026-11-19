@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/thekhegay/ngtrue/compare/v0.3.0...v0.3.1) (2026-11-19)
+
+### Bug Fixes
+
+* **node:** load devkit 22.3 and read npm 12 pack output ([3916709](https://github.com/thekhegay/ngtrue/commit/3916709399009e6274ed0b23a2f7766b47be9404))
+* **node:** name the devkit load failure without a dash ([062d26f](https://github.com/thekhegay/ngtrue/commit/062d26f63a964a6dac4cadf42fed9f66fb468839))
+
 ## [0.3.0](https://github.com/thekhegay/ngtrue/compare/v0.2.0...v0.3.0) (2026-10-23)
 
 ### ⚠ BREAKING CHANGES
