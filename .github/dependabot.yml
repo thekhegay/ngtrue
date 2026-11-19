@@ -9,7 +9,7 @@ updates:
       time: '08:00'
       timezone: 'Asia/Almaty'
     cooldown:
-      default-days: 1
+      default-days: 7
     open-pull-requests-limit: 10
     # Angular's compiler-cli declares `typescript >=6.0 <6.1`, so 6.1 and 7 do
     # not install at all - the bump lands as a red `npm ci`, not as a choice.
@@ -58,6 +58,8 @@ updates:
       day: 'monday'
       time: '08:00'
       timezone: 'Asia/Almaty'
+    cooldown:
+      default-days: 7
     groups:
       actions:
         patterns:
