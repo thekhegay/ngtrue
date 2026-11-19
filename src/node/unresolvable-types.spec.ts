@@ -84,6 +84,21 @@ describe('unresolvableTypes', () => {
       expect(await unresolvableTypes({ packageDir: FIXTURES.stylesheetsSound })).toEqual([]);
     });
 
+    it('names the target of a stylesheet a bare string offers every condition, and what to do about it', async () => {
+      // ngx-toastr's `{ "default": "./toastr.css" }`: no condition marks it a
+      // stylesheet, so a TypeScript import is offered it and gets nothing. The
+      // finding says what was offered, so the reader can tell a stylesheet from
+      // a missing file and knows `ignore` is the way to write the decision down.
+      const problems = await unresolvableTypes({ packageDir: FIXTURES.stylesheetsBare });
+      const css = (mode: string) =>
+        `fixture-stylesheets-bare/toastr.css does not resolve under ${mode}: exports["./toastr.css"] offers ` +
+        './toastr.css, which a TypeScript import turns into no declarations. If none is meant to reach it, ' +
+        'list "./toastr.css" in `ignore`.';
+
+      expect(problems).toEqual([css('node16'), css('bundler')]);
+      expect(await unresolvableTypes({ packageDir: FIXTURES.stylesheetsBare, ignore: ['./toastr.css'] })).toEqual([]);
+    });
+
     it('probes the same subpaths again once they offer TypeScript a JavaScript target', async () => {
       // `stylesheets-broken/` is the sound package with a `default` beside the
       // stylesheet in `./button/style/*` and in `./theme`. The `less`-only
