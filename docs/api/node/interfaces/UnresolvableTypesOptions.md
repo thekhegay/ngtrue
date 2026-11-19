@@ -52,7 +52,7 @@ excused — a bare string naming a `.css` file, say, which no TypeScript
 import is meant to resolve.
 
 A specifier of another package, exactly as a finding prints it, or the
-package's name, excuses the imports of it that the second lane reads — the
+package's name, excuses the imports of it that the second lane reads. It is the
 way to acknowledge an optional peer that is not installed.
 
 An entry that exempts nothing is reported: a subpath whose types resolve,

@@ -131,8 +131,8 @@ describe('unresolvableTypes', () => {
       // the entry point reaches only through a relative import, and a consumer
       // under either mode cannot resolve it.
       const hidden = (mode: string) =>
-        `dist/inner.d.ts: imports '@fixture/peer/deep/hidden', which does not resolve under ${mode} ` +
-        '— @fixture/peer is installed and does not offer that path.';
+        `dist/inner.d.ts: imports '@fixture/peer/deep/hidden', which does not resolve under ${mode}` +
+        ': @fixture/peer is installed and does not offer that path.';
       expect(await unresolvableTypes({ packageDir: FIXTURES.importsBroken })).toEqual([
         hidden('node16'),
         hidden('bundler'),
