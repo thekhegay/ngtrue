@@ -43,6 +43,7 @@ export const FIXTURES = {
   declarationsBroken: `${here}/declarations-broken`,
   declarationsHeadless: `${here}/declarations-headless`,
   angularSound: `${here}/angular-sound`,
+  angularTransitive: `${here}/angular-transitive`,
   angularFloorLow: `${here}/angular-floor-low`,
   angularService: `${here}/angular-service`,
   angularDeferred: `${here}/angular-deferred`,

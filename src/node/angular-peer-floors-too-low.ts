@@ -187,8 +187,10 @@ export async function angularPeerFloorsTooLow(options: AngularPeerFloorsTooLowOp
   const range = dependencyRecord(manifest.peerDependencies)['@angular/core'];
   if (range === undefined) {
     problems.push(
-      'the manifest declares no @angular/core peer dependency, so nothing holds a consumer to an Angular ' +
-        'that can link its declarations.',
+      '`peerDependencies` has no @angular/core entry, so there is no range to compare the minVersion of the ' +
+        'partial declarations with. This check reads the range of a direct @angular/core peer only: where the ' +
+        'Angular constraint arrives through another peer (@angular/material, say), it cannot say whether the ' +
+        'floor is high enough, and does not claim it is missing.',
     );
     return problems;
   }

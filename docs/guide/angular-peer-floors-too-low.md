@@ -19,6 +19,11 @@ it('admits no Angular that cannot link it', async () => {
 Point it at the built package. The declarations it reads exist only in the
 compiled output, so run against a source tree it reads nothing, and it says so.
 
+A package with no direct `@angular/core` peer gets one line saying what was
+read and that it cannot decide. The constraint may arrive through another peer,
+such as `@angular/material`, which this check does not follow, so the line does
+not claim it is missing.
+
 A finding names the declaration that sets the floor and the version the range
 has to start at:
 
