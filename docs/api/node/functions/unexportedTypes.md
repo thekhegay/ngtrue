@@ -4,7 +4,7 @@
 
 > **unexportedTypes**(`options`): `Promise`\<readonly `string`[]\>
 
-Defined in: [src/node/unexported-types.ts:200](https://github.com/thekhegay/ngtrue/blob/main/src/node/unexported-types.ts#L200)
+Defined in: [src/node/unexported-types.ts:229](https://github.com/thekhegay/ngtrue/blob/main/src/node/unexported-types.ts#L229)
 
 Every public member whose type names a declaration that no subpath of the
 package exports, as one sentence each. An empty array is a pass.
@@ -78,6 +78,33 @@ decision. A name that does not resolve and came from anywhere else — a
 dependency that is not installed, a global from an `@types` package the
 program cannot see — is skipped, because nothing from a dependency is judged
 whether it resolves or not.
+
+## Host directives
+
+A directive named in the `hostDirectives` of an exported component or
+directive, or of a base it extends, has to be exported by the same subpath
+the consumer imports the host from. Nothing in the host's own signatures
+names it: it is a type argument of the generated `ɵɵComponentDeclaration` or
+`ɵɵDirectiveDeclaration`, which the walk above skips, and a consumer whose
+compiler cannot name it from there fails with NG3004. The rule is per subpath
+and not "some subpath exports it", because that is the shape that shipped:
+ngx-signal-forms rc.13 exported `NgxFieldIdentityProvider` from its core
+subpath and not from `form-field`, whose component applies it
+([ngx-signal-forms#466](https://github.com/ngx-signal-forms/ngx-signal-forms/issues/466)),
+and igniteui-angular 22.2.4 did not export `IgxFocusRingDirective` at all
+([igniteui-angular#17838](https://github.com/IgniteUI/igniteui-angular/issues/17838)).
+A finding reads
+`ngx-lib/form-field: FormField has host directive FieldIdentity, which this subpath does not export.`
+and, for a base's, `TextField inherits host directive FieldTone from FieldBase, …`.
+
+A reference written through a bare specifier is judged by the module that
+specifier names, since that is the import the compiler chose; one written
+through a relative path or a local name is judged by the subpath the host is
+exported from. A directive of another package is not judged, and neither are
+the `imports` and `exports` of an `ɵɵNgModuleDeclaration`. The rule comes from
+what ngtsc did on those two reports and not from its specification, so a
+compiler that starts accepting a transitive export would make it stricter
+than it needs to be.
 
 Skipped, each because a consumer is not promised it or never meets it:
 `private` and `#private` members; `protected` members, which in an Angular

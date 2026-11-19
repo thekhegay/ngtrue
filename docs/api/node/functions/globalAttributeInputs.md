@@ -183,8 +183,8 @@ dependency moves.
 **Full compilation.** An application build emits `ɵɵdefineComponent`, which
 this does not read. A package with no partial declaration on a custom element
 gets one finding saying nothing was checked, rather than an empty array, and
-the finding names the reason: no partial declaration at all, which is full
-mode or the wrong directory, or declarations that all sit on an attribute, a
+the finding names the reason: no Angular declaration at all, which is a
+package that has none or the wrong directory, or only full-mode ones, or declarations that all sit on an attribute, a
 native element or no selector — a headless directive library, which is in
 the right form and simply has nothing in scope.
 
