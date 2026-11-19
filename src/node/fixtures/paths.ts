@@ -14,6 +14,7 @@ export const FIXTURES = {
   nameless: `${here}/nameless`,
   stylesheets: `${here}/stylesheets`,
   stylesheetsSound: `${here}/stylesheets-sound`,
+  stylesheetsBare: `${here}/stylesheets-bare`,
   stylesheetsBroken: `${here}/stylesheets-broken`,
   schematicsSound: `${here}/schematics-sound`,
   schematicsEsmScope: `${here}/schematics-esm-scope`,

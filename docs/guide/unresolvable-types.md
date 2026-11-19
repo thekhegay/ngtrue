@@ -85,6 +85,13 @@ await unresolvableTypes({ packageDir: 'dist', ignore: ['./i18n/*.json', './schem
 A specifier, or a package name, excuses the imports of another package the same
 way: `ignore: ['@optional/peer']`.
 
+A finding names the target the subpath offers, so a stylesheet can be told from
+a file that went missing:
+
+```text
+your-lib/toastr.css does not resolve under node16: exports["./toastr.css"] offers ./toastr.css, which a TypeScript import turns into no declarations. If none is meant to reach it, list "./toastr.css" in `ignore`.
+```
+
 A wildcard listed there is acknowledged as unprobed. A literal subpath is still
 probed under every mode, and what it reports is excused — a bare string naming a
 `.css` file, say, that no TypeScript import is meant to resolve.

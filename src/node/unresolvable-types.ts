@@ -145,7 +145,9 @@ export interface UnresolvableTypesOptions {
  * in #183 — is probed too: it offers the file to every condition, TypeScript's
  * included, and what a TypeScript import of it gets is the question this check
  * answers. A package that keeps that shape on purpose says so in `ignore`,
- * where the decision is written down rather than guessed from the extension.
+ * where the decision is written down rather than guessed from the extension,
+ * and the finding names the target the subpath offers so the reader can tell a
+ * stylesheet from a file that went missing.
  *
  * **Only the conditions this package actually declares are probed.** An
  * ESM-only package has no `require` branch, and reporting one missing would be
@@ -193,6 +195,10 @@ export async function unresolvableTypes(options: UnresolvableTypesOptions): Prom
         .map(target => target.subpath),
     ),
   ].sort();
+  const targetsOf = new Map<string, Set<string>>();
+  for (const { subpath, target } of exportTargets(manifest)) {
+    if (target !== null) targetsOf.set(subpath, (targetsOf.get(subpath) ?? new Set()).add(target));
+  }
   const ignored = new Set(options.ignore ?? []);
   const used = new Set<string>();
   const problems: string[] = [];
@@ -232,7 +238,15 @@ export async function unresolvableTypes(options: UnresolvableTypesOptions): Prom
       for (const mode of modes) {
         const compilerOptions = optionsFor(ts, mode);
         for (const { subpath, specifier } of probed) {
-          const finding = findingFor(ts, specifier, mode, probe.containingFile, compilerOptions);
+          const finding = findingFor(
+            ts,
+            specifier,
+            subpath,
+            [...(targetsOf.get(subpath) ?? [])],
+            mode,
+            probe.containingFile,
+            compilerOptions,
+          );
           if (finding === undefined) {
             resolvedAny = true;
           } else if (ignored.has(subpath)) {
@@ -402,12 +416,23 @@ function importsOfOtherPackages(
 function findingFor(
   ts: TypeScript,
   specifier: string,
+  subpath: string,
+  targets: readonly string[],
   mode: ResolutionMode,
   containingFile: string,
   compilerOptions: CompilerOptions,
 ): string | undefined {
   const resolved = ts.resolveModuleName(specifier, containingFile, compilerOptions, ts.sys).resolvedModule;
-  if (resolved === undefined) return `${specifier} does not resolve under ${mode}.`;
+  if (resolved === undefined) {
+    // The target is named because it is the part a reader cannot see from the
+    // specifier: ngx-toastr's `{ "default": "./toastr.css" }` read as eight
+    // lines saying a path "does not resolve", with nothing to say what it was
+    // or that `ignore` is the answer for a stylesheet.
+    return (
+      `${specifier} does not resolve under ${mode}: exports["${subpath}"] offers ${targets.join(', ')}, which a ` +
+      `TypeScript import turns into no declarations. If none is meant to reach it, list "${subpath}" in \`ignore\`.`
+    );
+  }
   if (resolved.resolvedFileName.endsWith('.d.ts') || resolved.resolvedFileName.endsWith('.d.mts')) return undefined;
   return (
     `${specifier} resolves under ${mode} to ${resolved.resolvedFileName}, which is not a declaration file — ` +
