@@ -129,6 +129,11 @@ export interface UnloadableSchematicsOptions {
  * `@angular-devkit/schematics`, an optional peer of ngtrue, and throws rather
  * than passing when it is absent.
  *
+ * **The answer is the installed devkit's answer** as well. `ng update` loads a
+ * package's migrations with the newest CLI, so run the check in CI against the
+ * newest `@angular-devkit/schematics` too, not only the one the repository
+ * pins.
+ *
  * **The answer is this Node's answer**, as the CLI's is the consumer's. A
  * true-ESM factory loads through `require()` on every Node the current CLI
  * supports and would not have on older ones.
@@ -230,19 +235,43 @@ interface Collection {
   };
 }
 
-async function loadDevkit(): Promise<SchematicsDevkit> {
-  let engine: { default?: unknown };
-  let tools: { default?: unknown };
+type Imported = { default?: unknown };
+
+/**
+ * How the devkit is imported. The specifiers are literals at the call sites
+ * rather than computed, because the peer-dependency check reads them.
+ */
+interface DevkitImports {
+  readonly engine: () => Promise<Imported>;
+  readonly tools: () => Promise<Imported>;
+  readonly toolsIndex: () => Promise<Imported>;
+}
+
+const DEVKIT: DevkitImports = {
+  engine: () => import('@angular-devkit/schematics'),
+  tools: () => import('@angular-devkit/schematics/tools'),
+  toolsIndex: () => import('@angular-devkit/schematics/tools/index.js'),
+};
+
+/**
+ * Imports the devkit's engine and its `tools` entry. `imports` exists so a spec
+ * can point this at another copy of the devkit.
+ */
+export async function loadDevkit(imports: DevkitImports = DEVKIT): Promise<SchematicsDevkit> {
+  let engine: Imported;
+  let tools: Imported;
   try {
-    engine = await import('@angular-devkit/schematics');
-    // `tools` is a directory with its own `package.json`, and the devkit has no
-    // `exports` map, so an ESM import has to name the file: Node's ESM resolver
-    // refuses a directory where `require` would have read its `main`.
-    tools = await import('@angular-devkit/schematics/tools/index.js');
+    engine = await imports.engine();
+    tools = await importTools(imports);
   } catch (error) {
     const code = (error as { code?: unknown }).code;
     if (code !== 'ERR_MODULE_NOT_FOUND' && code !== 'MODULE_NOT_FOUND') {
-      throw new Error('ngtrue: `@angular-devkit/schematics` is installed and did not load.', { cause: error });
+      const cause = error as { code?: unknown; message?: unknown };
+      const detail = [cause.code, cause.message].filter(part => typeof part === 'string').join(': ');
+      throw new Error(
+        `ngtrue: \`@angular-devkit/schematics\` is installed and did not load${detail === '' ? '.' : ` — ${detail}`}`,
+        { cause: error },
+      );
     }
     throw new Error(
       'ngtrue: `unloadableSchematics` needs the `@angular-devkit/schematics` package, which is an ' +
@@ -257,6 +286,22 @@ async function loadDevkit(): Promise<SchematicsDevkit> {
   const { SchematicEngine } = (engine.default ?? engine) as Pick<SchematicsDevkit, 'SchematicEngine'>;
   const { NodeModulesEngineHost } = (tools.default ?? tools) as Pick<SchematicsDevkit, 'NodeModulesEngineHost'>;
   return { SchematicEngine, NodeModulesEngineHost };
+}
+
+/**
+ * `tools` is a directory with its own `package.json`. From 22.3.0 the devkit has
+ * an `exports` map that exposes `./tools` and not `./tools/index.js`; before
+ * that it has no map, and an ESM import of the bare directory is refused with
+ * `ERR_UNSUPPORTED_DIR_IMPORT`, so the file has to be named. Only that one error
+ * falls back: anything else is a real failure.
+ */
+async function importTools(imports: DevkitImports): Promise<Imported> {
+  try {
+    return await imports.tools();
+  } catch (error) {
+    if ((error as { code?: unknown }).code !== 'ERR_UNSUPPORTED_DIR_IMPORT') throw error;
+    return await imports.toolsIndex();
+  }
 }
 
 /**
@@ -442,14 +487,15 @@ function packedFiles(packageDir: string, name: string): readonly string[] {
       cause: error,
     });
   }
-  const names = Array.isArray(packs) ? packs.map(pack => (pack as { name?: unknown }).name) : [];
-  if (names.length !== 1 || names[0] !== name) {
+  const entries = packEntries(packs);
+  const names = entries.map(pack => pack.name);
+  if (entries.length !== 1 || names[0] !== name) {
     throw new Error(
       `ngtrue: \`npm pack --dry-run\` in ${packageDir} packed ${JSON.stringify(names)}, not "${name}" alone, ` +
         "so the file list it printed is not this package's.",
     );
   }
-  const listed = ((packs as readonly unknown[])[0] as { files?: unknown }).files;
+  const listed = entries[0]?.files;
   if (!Array.isArray(listed)) {
     throw new Error(`ngtrue: \`npm pack --dry-run --json\` in ${packageDir} printed no file list.`);
   }
@@ -457,6 +503,22 @@ function packedFiles(packageDir: string, name: string): readonly string[] {
     listed.map(file => (file as { path?: unknown }).path).filter((path): path is string => typeof path === 'string'),
     packageDir,
   );
+}
+
+/**
+ * The packs `npm pack --json` printed. npm 11 and older print an array of them;
+ * npm 12 prints an object keyed by package name, so the name is read from the
+ * value in both.
+ *
+ * @internal
+ */
+export function packEntries(printed: unknown): readonly { readonly name?: unknown; readonly files?: unknown }[] {
+  const values = Array.isArray(printed)
+    ? printed
+    : printed !== null && typeof printed === 'object'
+      ? Object.values(printed)
+      : [];
+  return values.filter((value): value is object => value !== null && typeof value === 'object');
 }
 
 /**
