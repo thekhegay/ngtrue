@@ -362,6 +362,12 @@ whole of Angular's mechanism. What is left for a reviewer:
   surrounding field and read the real one with `skipSelf`, or its inner controls
   each announce the outer field's error as their own. That turns on your
   library's own form-field token, which ngtrue cannot know about.
+- **The type of a constraint input must include `undefined`.** `[formField]`
+  binds `min`, `max`, `minLength` and `maxLength` with `undefined` when the field
+  has no such constraint, and `strictTemplates` rejects a control whose input is
+  typed `number` alone, in the consumer's template, which this assertion does
+  not compile. A class that `implements FormValueControl<T>` has it caught by `tsc`
+  ([angular/angular#71377](https://github.com/angular/angular/issues/71377)).
 
 **The focus rule proves focus arrived, not that it arrived somewhere useful.**
 jsdom has no layout, so a target clipped to nothing, moved off-screen,
