@@ -15,7 +15,7 @@ export interface UnexportedTypesOptions {
   /** The directory holding the `package.json` to check — the BUILT package, whose declarations a consumer reads. */
   readonly packageDir: string;
   /**
-   * Findings that are decisions rather than defects, each spelled one of two
+   * Findings that are decisions rather than defects, each spelled one of three
    * ways.
    *
    * - **A declaration's name**, exactly as a finding prints it, for a type that
@@ -24,6 +24,8 @@ export interface UnexportedTypesOptions {
    *   public signature names it, and every other unexported declaration that
    *   happens to share the name. A name that does not resolve at all cannot be
    *   exempted: a declaration file that is missing is not a decision.
+   * - **A host directive's name**, for one that is meant to stay out of a
+   *   subpath its host is imported from. It exempts every host that applies it.
    * - **A subpath**, spelled as it is in `exports` (`"./schematics/*"`), to
    *   acknowledge that a wildcard cannot be read, or that a subpath does not
    *   load as declarations on purpose.
@@ -108,6 +110,33 @@ export interface UnexportedTypesOptions {
  * dependency that is not installed, a global from an `@types` package the
  * program cannot see — is skipped, because nothing from a dependency is judged
  * whether it resolves or not.
+ *
+ * ## Host directives
+ *
+ * A directive named in the `hostDirectives` of an exported component or
+ * directive, or of a base it extends, has to be exported by the same subpath
+ * the consumer imports the host from. Nothing in the host's own signatures
+ * names it: it is a type argument of the generated `ɵɵComponentDeclaration` or
+ * `ɵɵDirectiveDeclaration`, which the walk above skips, and a consumer whose
+ * compiler cannot name it from there fails with NG3004. The rule is per subpath
+ * and not "some subpath exports it", because that is the shape that shipped:
+ * ngx-signal-forms rc.13 exported `NgxFieldIdentityProvider` from its core
+ * subpath and not from `form-field`, whose component applies it
+ * ([ngx-signal-forms#466](https://github.com/ngx-signal-forms/ngx-signal-forms/issues/466)),
+ * and igniteui-angular 22.2.4 did not export `IgxFocusRingDirective` at all
+ * ([igniteui-angular#17838](https://github.com/IgniteUI/igniteui-angular/issues/17838)).
+ * A finding reads
+ * `ngx-lib/form-field: FormField has host directive FieldIdentity, which this subpath does not export.`
+ * and, for a base's, `TextField inherits host directive FieldTone from FieldBase, …`.
+ *
+ * A reference written through a bare specifier is judged by the module that
+ * specifier names, since that is the import the compiler chose; one written
+ * through a relative path or a local name is judged by the subpath the host is
+ * exported from. A directive of another package is not judged, and neither are
+ * the `imports` and `exports` of an `ɵɵNgModuleDeclaration`. The rule comes from
+ * what ngtsc did on those two reports and not from its specification, so a
+ * compiler that starts accepting a transitive export would make it stricter
+ * than it needs to be.
  *
  * Skipped, each because a consumer is not promised it or never meets it:
  * `private` and `#private` members; `protected` members, which in an Angular
@@ -327,6 +356,10 @@ function read(
 
   // ── What the subpaths export, unioned before anything is judged ──────────
   const exported = new Set<TS.Node>();
+  // What each subpath exports ON ITS OWN, kept apart from the union: a host
+  // directive has to be reachable from the subpath its host is imported from.
+  const exportedBy = new Map<string, Set<TS.Node>>();
+  const classesBy = new Map<string, Map<TS.Symbol, string>>();
   const subjects: Subject[] = [];
   const seen = new Set<TS.Symbol>();
 
@@ -335,9 +368,17 @@ function read(
       const symbol = target(exportSymbol);
       const declarations = symbol.declarations ?? [];
       if (declarations.length === 0) continue; // an unresolved re-export: nothing to count or to read
-      for (const declaration of declarations) exported.add(declaration);
+      const own = exportedBy.get(specifier) ?? new Set<TS.Node>();
+      exportedBy.set(specifier, own);
+      for (const declaration of declarations) {
+        exported.add(declaration);
+        own.add(declaration);
+      }
 
       const label = `${prefix}${exportSymbol.getName()}`;
+      const classes = classesBy.get(specifier) ?? new Map<TS.Symbol, string>();
+      classesBy.set(specifier, classes);
+      classes.set(symbol, label);
       if (seen.has(symbol)) continue;
       seen.add(symbol);
       subjects.push({ specifier, label, symbol });
@@ -543,6 +584,103 @@ function read(
     }
   }
 
+  // ── What the exported classes apply as host directives ───────────────────
+  // `hostDirectives` lives in the generated `ɵɵComponentDeclaration` /
+  // `ɵɵDirectiveDeclaration`, which the signature walk skips by the `ɵ` rule.
+  // The directive is a type argument there, so a consumer's compiler needs to
+  // name it from the declaration file and fails with NG3004 when it cannot.
+  const hostDirectivesOf = (declaration: TS.ClassDeclaration): TS.TypeNode | undefined => {
+    for (const member of declaration.members) {
+      if (
+        !ts.isPropertyDeclaration(member) ||
+        (nameText(ts, member.name) !== 'ɵcmp' && nameText(ts, member.name) !== 'ɵdir')
+      ) {
+        continue;
+      }
+      const type = member.type;
+      if (type === undefined || !ts.isTypeReferenceNode(type)) continue;
+      const callee = ts.isQualifiedName(type.typeName) ? type.typeName.right.text : type.typeName.text;
+      if (callee !== 'ɵɵComponentDeclaration' && callee !== 'ɵɵDirectiveDeclaration') continue;
+      return type.typeArguments?.[HOST_DIRECTIVES_ARGUMENT];
+    }
+    return undefined;
+  };
+
+  /** The class and every base it extends, nearest first. */
+  const inheritance = (declaration: TS.ClassDeclaration): readonly TS.ClassDeclaration[] => {
+    const chain: TS.ClassDeclaration[] = [];
+    let current: TS.ClassDeclaration | undefined = declaration;
+    while (current !== undefined && !chain.includes(current)) {
+      chain.push(current);
+      const clause: TS.HeritageClause | undefined = current.heritageClauses?.find(
+        c => c.token === ts.SyntaxKind.ExtendsKeyword,
+      );
+      const base: TS.ExpressionWithTypeArguments | undefined = clause?.types[0];
+      const symbol: TS.Symbol | undefined = base && checker.getSymbolAtLocation(base.expression);
+      current = symbol && target(symbol).declarations?.find(ts.isClassDeclaration);
+    }
+    return chain;
+  };
+
+  for (const [specifier, classes] of classesBy) {
+    const here = exportedBy.get(specifier) ?? new Set<TS.Node>();
+    for (const [symbol, label] of classes) {
+      if (label.split('.').some(part => part.startsWith('ɵ'))) continue;
+      for (const declaration of symbol.declarations ?? []) {
+        if (!ts.isClassDeclaration(declaration) || !inPackage(declaration.getSourceFile())) continue;
+        if (isInternal(ts, declaration)) continue;
+        for (const base of inheritance(declaration)) {
+          const hosts = hostDirectivesOf(base);
+          if (hosts === undefined) continue;
+          const queries: TS.TypeQueryNode[] = [];
+          const collectQueries = (node: TS.Node): void => {
+            if (ts.isTypeQueryNode(node)) queries.push(node);
+            ts.forEachChild(node, collectQueries);
+          };
+          collectQueries(hosts);
+
+          for (const query of queries) {
+            const found = checker.getSymbolAtLocation(query.exprName);
+            if (found === undefined) continue;
+            const owned = (target(found).declarations ?? []).filter(
+              d => ts.isClassDeclaration(d) && inPackage(d.getSourceFile()),
+            );
+            if (owned.length === 0) continue; // someone else's directive: not judged
+
+            // A reference through a bare specifier is the compiler's own choice
+            // of where to import from, so the module it names is the one that
+            // has to export the directive; a relative or local one is reachable
+            // only if the subpath the host is imported from exports it itself.
+            const literal = importedBy(query.exprName);
+            const bare = literal !== undefined && ts.isStringLiteral(literal) && !literal.text.startsWith('.');
+            let reachable: boolean;
+            if (bare) {
+              const module = checker.getSymbolAtLocation(literal);
+              if (module === undefined) continue;
+              reachable = checker
+                .getExportsOfModule(module)
+                .some(e => (target(e).declarations ?? []).some(d => owned.includes(d)));
+            } else {
+              reachable = owned.some(d => here.has(d));
+            }
+            if (reachable) continue;
+
+            const directive = qualifiedName(ts, owned[0] as TS.Node);
+            if (ignored.has(directive)) {
+              used.add(directive);
+              continue;
+            }
+            const who =
+              base === declaration
+                ? `${label} has host directive ${directive}`
+                : `${label} inherits host directive ${directive} from ${base.name?.text ?? 'its base'}`;
+            report(`${specifier}: ${who}, which ${bare ? `'${literal.text}'` : 'this subpath'} does not export.`);
+          }
+        }
+      }
+    }
+  }
+
   if (loaded > 0 && walked === 0) {
     // Not a pass. An empty array would say every signature checked out, and
     // there were none to check.
@@ -554,6 +692,9 @@ function read(
 
   return { problems, loaded };
 }
+
+/** `ɵɵComponentDeclaration` and `ɵɵDirectiveDeclaration` both carry `HostDirectives` ninth. */
+const HOST_DIRECTIVES_ARGUMENT = 8;
 
 /**
  * Every subpath with at least one target an import could carry a type

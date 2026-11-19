@@ -64,6 +64,23 @@ The subpath itself still resolves, so nothing else notices, and a consumer
 under `skipLibCheck` gets `any` in its place without a word. `ignore` does not
 reach these: a missing file is never a decision.
 
+## Host directives
+
+A directive in the `hostDirectives` of an exported component or directive, or
+of a base it extends, has to be exported by the subpath the consumer imports the
+host from. The generated `ɵɵComponentDeclaration` carries it as a type
+argument, and a consumer whose compiler cannot name it from there fails with
+NG3004:
+
+```text
+your-lib/form-field: FormField has host directive FieldIdentity, which this subpath does not export.
+```
+
+"Some subpath exports it" is not enough: ngx-signal-forms rc.13 exported its
+identity directive from `core` and not from `form-field`, whose component
+applies it. A directive of another package is not judged. Pass the directive's
+name in `ignore` for one that is meant to stay out of a subpath.
+
 Skipped, because a consumer is not promised them or never meets them:
 
 - `private` and `#private` members
