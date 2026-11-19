@@ -4,25 +4,29 @@ on:
   push:
     branches: [main]
   pull_request:
-  # Dispatched by release-pr.yml: its pull request is opened with GITHUB_TOKEN,
-  # which starts no pull_request run, and main requires this check.
+  # Dispatched by release-pr.yml: a pull request opened with GITHUB_TOKEN starts no run.
   workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # The lowest supported major, so a syntax or API that only the newest
-          # runtime has fails here rather than in somebody's install. The range
-          # itself lives in `engines`; this is the floor of it.
-          node-version: 22
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
           cache: npm
 
       - run: npm ci
@@ -31,27 +35,76 @@ jobs:
 
       - run: npm run typecheck
 
-      # Before the tests, and not only because `pretest:coverage` would do it
-      # anyway: a build failure should be reported as a build failure.
       - run: npm run build
 
-      # `npm test`, instrumented. Its own `pretest:coverage` builds the
-      # fixtures: npm runs `pre<name>` for the script's own name only, so
-      # `pretest` does not run here.
+      # `pretest:coverage` builds the fixtures: npm runs `pre<name>` for the exact name only.
       - run: npm run test:coverage
 
-      # Never fails the job. The number is a pointer for a reader, not a gate,
-      # and an upload that cannot authenticate — a pull request from a fork has
-      # no secrets — should not turn a green run red.
-      - uses: codecov/codecov-action@v7
+      - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/lcov.info
           fail_ci_if_error: false
 
-      # The committed API reference against what the sources say now. Fails on a
-      # change that was made without regenerating it, which is the only way a
-      # generated-and-committed document stays true.
       - run: npm run docs:check
 
       - run: npm run docs:build
+
+  node:
+    name: node (${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm test
+
+  workflows:
+    name: Workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: actionlint
+        run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12 -color
+      - uses: zizmorcore/zizmor-action@45d7276c9ca790aabd705e31ca99c6185c3e76dd # v0.8.1
+        with:
+          version: 1.32.0
+          advanced-security: false
+          annotations: true
+
+  passed:
+    name: CI passed
+    if: always()
+    needs: [check, node, workflows]
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Every job passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "$RESULTS"
+          for result in $RESULTS; do
+            [[ "$result" == success || "$result" == skipped ]] || exit 1
+          done
