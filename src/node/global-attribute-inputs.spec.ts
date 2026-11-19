@@ -275,16 +275,30 @@ describe('globalAttributeInputs', () => {
     });
   });
 
-  it('reports, rather than passes, a package with no partial declarations to read', async () => {
+  it('reports, rather than passes, a package with no Angular declarations, and says it has none', async () => {
     // An empty array here would be true — no declaration leaks anything — and
-    // would answer a question nobody asked. This is what a package compiled in
-    // full mode, or a path pointed at the wrong directory, looks like.
-    const problems = await globalAttributeInputs({ packageDir: FIXTURES.sound });
+    // would answer a question nobody asked. This is @ngrx/store, or a path
+    // pointed at the wrong directory; blaming full mode would send its author
+    // after a build problem that is not there.
+    expect(await globalAttributeInputs({ packageDir: FIXTURES.sound })).toEqual([
+      expect.stringMatching(
+        /^read \d+ JavaScript file\(s\) reachable from `exports` and found 0 partial declaration\(s\), none of them on a custom element — so nothing was checked\. The files hold no Angular component or directive at all, in partial or in full form, so the package has none to check\. If it is meant to have some, `packageDir` is the wrong directory\.$/,
+      ),
+    ]);
+  });
 
-    expect(problems).toHaveLength(1);
-    expect(problems[0]).toContain('found 0 partial declaration(s)');
-    expect(problems[0]).toContain('nothing was checked');
-    expect(problems[0]).toContain('compiled in full mode');
+  it('reports a package compiled in full mode as that, which is a build in the wrong form', async () => {
+    // `@fixture/full` is the sound package's opposite: it HAS a directive, and
+    // `ɵɵdefineDirective` is how an application build writes it.
+    const problems = await globalAttributeInputs({
+      packageDir: `${import.meta.dirname}/fixtures/node_modules/@fixture/full`,
+    });
+
+    expect(problems).toEqual([
+      expect.stringMatching(
+        /found 0 partial declaration\(s\), none of them on a custom element — so nothing was checked\. They hold components or directives compiled in full mode, which carry `ɵɵdefineComponent` rather than `ɵɵngDeclareComponent`/,
+      ),
+    ]);
   });
 
   it('reports a partial package with nothing on a custom element without blaming full mode', async () => {
