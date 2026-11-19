@@ -1,9 +1,5 @@
 name: Release
 
-# Publishes when a `chore(release): vX.Y.Z` commit lands on main. The bump
-# itself goes through a pull request like any other change - release-pr.yml
-# cuts it from the Actions tab - so nothing here pushes to a protected branch:
-# the tag is all this workflow writes.
 on:
   push:
     branches: [main]
@@ -12,15 +8,14 @@ concurrency:
   group: release
   cancel-in-progress: false
 
-permissions:
-  contents: read
+permissions: {}
 
-# SHA-pinned because this workflow holds the npm OIDC token; keep the version comments.
 jobs:
   release:
     name: Tag, release and publish
     runs-on: ubuntu-latest
     if: "${{ startsWith(github.event.head_commit.message, 'chore(release): v') }}"
+    timeout-minutes: 15
 
     permissions:
       contents: write
@@ -29,7 +24,7 @@ jobs:
       pull-requests: read
 
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 # zizmor: ignore[artipacked] the job pushes the tag with git
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -103,13 +98,15 @@ jobs:
       # Tagged after the publish: a tag naming a version npm rejected is worse
       # than no tag, because the next attempt would refuse to reuse it.
       - name: Tag the release
+        env:
+          TAG: ${{ steps.bump.outputs.tag }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git tag -a "${{ steps.bump.outputs.tag }}" -m "${{ steps.bump.outputs.tag }}"
-          git push origin "${{ steps.bump.outputs.tag }}"
+          git tag -a "$TAG" -m "$TAG"
+          git push origin "$TAG"
 
-      - uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3
+      - uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           tag_name: ${{ steps.bump.outputs.tag }}
           name: ${{ steps.bump.outputs.tag }}
