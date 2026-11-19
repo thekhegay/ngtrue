@@ -5,8 +5,10 @@ import { angularPeerFloorsTooLow } from './angular-peer-floors-too-low.js';
 import { FIXTURES } from './fixtures/paths.js';
 
 const NO_PEER =
-  'the manifest declares no @angular/core peer dependency, so nothing holds a consumer to an Angular ' +
-  'that can link its declarations.';
+  '`peerDependencies` has no @angular/core entry, so there is no range to compare the minVersion of the ' +
+  'partial declarations with. This check reads the range of a direct @angular/core peer only: where the ' +
+  'Angular constraint arrives through another peer (@angular/material, say), it cannot say whether the ' +
+  'floor is high enough, and does not claim it is missing.';
 
 function noDeclarations(files: number): string {
   return (
@@ -20,6 +22,13 @@ function noDeclarations(files: number): string {
 describe('angularPeerFloorsTooLow', () => {
   it('finds nothing wrong with a range whose floor links every declaration', async () => {
     expect(await angularPeerFloorsTooLow({ packageDir: FIXTURES.angularSound })).toEqual([]);
+  });
+
+  it('does not claim the constraint is missing when it may arrive through another peer', async () => {
+    // `@angular/material` as the only Angular peer, the way @ngx-formly/material
+    // 11.2.0 ships. The package has declarations to compare, so the line is
+    // about the range being unreadable and not about there being nothing to read.
+    expect(await angularPeerFloorsTooLow({ packageDir: FIXTURES.angularTransitive })).toEqual([NO_PEER]);
   });
 
   it('strips the prerelease from the floor before comparing, the way the linker does', async () => {
