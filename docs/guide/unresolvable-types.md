@@ -52,6 +52,27 @@ package appears to work right up until something that should not have compiled
 ships. The two are distinguished in the message because they have different
 fixes.
 
+## Imports of other packages
+
+What your declarations import matters as much as what they export. Starting from
+the declaration files the subpaths resolve to, and following relative imports,
+each bare specifier of **another** package is resolved from the file that names
+it, under each mode:
+
+```text
+dist/inner.d.ts: imports '@ngx-formly/core/types/x', which does not resolve under node16 — @ngx-formly/core is installed and does not offer that path.
+```
+
+That is [ngx-formly#4218](https://github.com/ngx-formly/ngx-formly/issues/4218):
+a declaration imported a path its neighbour package has on disk and does not
+export, and every consumer's build failed until the next patch. TypeScript says
+nothing at the package that causes it.
+
+A specifier whose package is not installed cannot be answered, and is reported
+in one line naming all of them, not passed. Run the check where your
+dependencies are installed. A relative import, one of your own name, a `#`
+import and a Node built-in are not judged.
+
 ## Exempting a decision
 
 Some subpaths are not for TypeScript and are kept that way on purpose. List
@@ -60,6 +81,9 @@ them, spelled as they are in `exports`:
 ```ts
 await unresolvableTypes({ packageDir: 'dist', ignore: ['./i18n/*.json', './schematics/*'] });
 ```
+
+A specifier, or a package name, excuses the imports of another package the same
+way: `ignore: ['@optional/peer']`.
 
 A wildcard listed there is acknowledged as unprobed. A literal subpath is still
 probed under every mode, and what it reports is excused — a bare string naming a

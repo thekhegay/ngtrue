@@ -1,6 +1,8 @@
-import { resolve } from 'node:path';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { builtinModules } from 'node:module';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 
-import type { CompilerOptions } from 'typescript';
+import type { CompilerOptions, Node, SourceFile } from 'typescript';
 
 import { STYLESHEET_CONDITIONS, exportTargets, readManifest } from './manifest.js';
 import { loadTypeScript, stageProbe, type TypeScript } from './probe.js';
@@ -35,8 +37,13 @@ export interface UnresolvableTypesOptions {
    * excused — a bare string naming a `.css` file, say, which no TypeScript
    * import is meant to resolve.
    *
+   * A specifier of another package, exactly as a finding prints it, or the
+   * package's name, excuses the imports of it that the second lane reads — the
+   * way to acknowledge an optional peer that is not installed.
+   *
    * An entry that exempts nothing is reported: a subpath whose types resolve,
-   * one skipped as a stylesheet, one the manifest does not have. An exemption
+   * one skipped as a stylesheet, one the manifest does not have, a specifier
+   * nothing imports. An exemption
    * list is a claim about the package, and one that outlived the thing it
    * excused says something false the next time somebody reads it.
    */
@@ -70,6 +77,31 @@ export interface UnresolvableTypesOptions {
  * resolves to nothing. It is the worse of the two — a consumer gets `any`, no
  * error, and the package appears to work until something that should not have
  * compiled ships.
+ *
+ * ## A second lane: other packages' paths
+ *
+ * Resolving the package's own subpaths says nothing about what its declarations
+ * import. Starting from the declaration files the subpaths resolve to, and
+ * following relative imports, every bare specifier of ANOTHER package is
+ * resolved from the file that names it, under each mode, and one the package it
+ * names does not offer is a finding:
+ * `dist/inner.d.ts: imports '@ngx-formly/core/types/x', which does not resolve under node16 — @ngx-formly/core is installed and does not offer that path.`
+ * That is [ngx-formly#4218](https://github.com/ngx-formly/ngx-formly/issues/4218):
+ * `@ngx-formly/material` 10.0.0 shipped a declaration importing a path
+ * `@ngx-formly/core` has on disk and does not export, and every consumer's
+ * build failed until 10.0.1, an hour later. TypeScript says nothing at the
+ * package that causes it, and `arethetypeswrong` follows imports of the
+ * package's own name only.
+ *
+ * A specifier whose package is not installed where the file would find it, or
+ * as `@types/<name>`, cannot be answered, and is reported in ONE line naming
+ * all of them rather than passed: `ignore` takes a specifier or a package name
+ * for those, and for a finding. A relative import, one of the package's own
+ * name, `#` imports and Node built-ins are not judged here. Only files an
+ * entry point reaches are read, since a declaration nothing imports is not what
+ * a consumer's compiler opens. Where the peers are not installed, as in a bare
+ * checkout, this lane is mostly the "not checked" line: run it where the
+ * package's dependencies are.
  *
  * ## What it does not check
  *
@@ -194,6 +226,7 @@ export async function unresolvableTypes(options: UnresolvableTypesOptions): Prom
     problems.push(`${why}, so nothing was checked.`);
   } else {
     let resolvedAny = false;
+    const notInstalled = new Set<string>();
     const probe = stageProbe(name, packageDir);
     try {
       for (const mode of modes) {
@@ -209,8 +242,29 @@ export async function unresolvableTypes(options: UnresolvableTypesOptions): Prom
           }
         }
       }
+
+      // The second lane reads the declarations the subpaths resolved to, so
+      // it starts from where the first one landed.
+      for (const mode of modes) {
+        const compilerOptions = optionsFor(ts, mode);
+        const entries = probed
+          .map(({ specifier }) => ts.resolveModuleName(specifier, probe.containingFile, compilerOptions, ts.sys))
+          .map(result => result.resolvedModule?.resolvedFileName)
+          .filter((file): file is string => file !== undefined && isDeclarationFile(file));
+        problems.push(
+          ...importsOfOtherPackages(ts, name, packageDir, entries, mode, compilerOptions, ignored, used, notInstalled),
+        );
+      }
     } finally {
       probe.dispose();
+    }
+
+    if (notInstalled.size > 0) {
+      const list = [...notInstalled].sort();
+      problems.push(
+        `${String(list.length)} specifier${list.length === 1 ? '' : 's'} imported by the shipped declarations belong to ` +
+          `packages that are not installed, so whether they resolve was not checked: ${list.join(', ')}.`,
+      );
     }
 
     if (!resolvedAny && probed.every(entry => ignored.has(entry.subpath))) {
@@ -231,6 +285,116 @@ export async function unresolvableTypes(options: UnresolvableTypesOptions): Prom
     );
   }
 
+  return problems;
+}
+
+function isDeclarationFile(file: string): boolean {
+  return /\.d\.[cm]?ts$/.test(file);
+}
+
+/** `@scope/name` or `name`, from a specifier that may carry a subpath. */
+function packageNameOf(specifier: string): string {
+  const parts = specifier.split('/');
+  return specifier.startsWith('@') ? parts.slice(0, 2).join('/') : (parts[0] as string);
+}
+
+/** Where `name` is installed as seen from `file`, the way Node walks up for it, or `undefined`. */
+function installedAt(name: string, file: string): string | undefined {
+  const types = name.startsWith('@') ? `@types/${name.slice(1).replace('/', '__')}` : `@types/${name}`;
+  for (let dir = dirname(file); ; dir = dirname(dir)) {
+    for (const candidate of [name, types]) {
+      const path = join(dir, 'node_modules', candidate);
+      if (existsSync(join(path, 'package.json'))) return path;
+    }
+    if (dirname(dir) === dir) return undefined;
+  }
+}
+
+/** Every module specifier a declaration file names, whichever way it names it. */
+function specifiersIn(ts: TypeScript, source: SourceFile): readonly string[] {
+  const found: string[] = [];
+  const visit = (node: Node): void => {
+    if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier !== undefined) {
+      if (ts.isStringLiteral(node.moduleSpecifier)) found.push(node.moduleSpecifier.text);
+    } else if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) {
+      if (ts.isStringLiteral(node.moduleReference.expression)) found.push(node.moduleReference.expression.text);
+    } else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
+      if (ts.isStringLiteral(node.argument.literal)) found.push(node.argument.literal.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return found;
+}
+
+/**
+ * The second lane: every bare specifier the package's own declarations import
+ * from another package, resolved against that package's `exports`.
+ *
+ * It starts from the declaration files the subpaths resolved to and follows
+ * relative imports, and reads nothing else. A declaration file nothing reaches
+ * is not what a consumer's compiler opens, and `parse5` in the CDK's
+ * `node_modules` shows what reading all of them costs: findings about files no
+ * import leads to.
+ */
+function importsOfOtherPackages(
+  ts: TypeScript,
+  packageName: string,
+  packageDir: string,
+  entries: readonly string[],
+  mode: ResolutionMode,
+  compilerOptions: CompilerOptions,
+  ignored: ReadonlySet<string>,
+  used: Set<string>,
+  notInstalled: Set<string>,
+): readonly string[] {
+  const root = realpathSync(packageDir);
+  const inside = (file: string): boolean => {
+    const path = relative(root, file);
+    return path !== '' && !path.startsWith('..') && !path.split(sep).includes('node_modules');
+  };
+  const own = (specifier: string): boolean =>
+    specifier.startsWith('.') || specifier === packageName || specifier.startsWith(`${packageName}/`);
+
+  const problems: string[] = [];
+  const seen = new Set<string>();
+  const queue = [...entries];
+  while (queue.length > 0) {
+    const file = queue.shift() as string;
+    if (seen.has(file)) continue;
+    seen.add(file);
+    const text = readFileSync(file, 'utf8');
+    const source = ts.createSourceFile(file, text, ts.ScriptTarget.ES2022, false);
+
+    for (const specifier of new Set(specifiersIn(ts, source))) {
+      if (own(specifier)) {
+        // Followed so what lies behind it is read, and not judged: whether the
+        // package's own paths resolve is the first lane's question for the
+        // subpaths, and a relative one is the build's.
+        const next = ts.resolveModuleName(specifier, file, compilerOptions, ts.sys).resolvedModule?.resolvedFileName;
+        if (next !== undefined && isDeclarationFile(next) && inside(next)) queue.push(next);
+        continue;
+      }
+      if (specifier.startsWith('#') || specifier.startsWith('node:') || builtinModules.includes(specifier)) continue;
+
+      const name = packageNameOf(specifier);
+      if (ignored.has(specifier) || ignored.has(name)) {
+        used.add(ignored.has(specifier) ? specifier : name);
+        continue;
+      }
+      if (installedAt(name, file) === undefined) {
+        notInstalled.add(specifier);
+        continue;
+      }
+      const resolved = ts.resolveModuleName(specifier, file, compilerOptions, ts.sys).resolvedModule;
+      if (resolved === undefined) {
+        problems.push(
+          `${relative(root, file).split(sep).join('/')}: imports '${specifier}', which does not resolve under ${mode} ` +
+            `— ${name} is installed and does not offer that path.`,
+        );
+      }
+    }
+  }
   return problems;
 }
 
