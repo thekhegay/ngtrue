@@ -1,10 +1,5 @@
 name: Release PR
 
-# Cuts the release pull request from the Actions tab: bumps package.json and
-# package-lock.json, writes the CHANGELOG.md section and opens
-# `chore(release): vX.Y.Z` against main with that section as its body. Merging
-# it (rebase is the only method the repository allows, so the head commit keeps
-# that subject) is what publishes, through release.yml.
 on:
   workflow_dispatch:
     inputs:
@@ -18,27 +13,34 @@ on:
           - minor
           - major
 
-permissions:
-  contents: write
-  pull-requests: write
-  # A pull request opened with GITHUB_TOKEN starts no workflows, and main
-  # requires the CI check, so the job dispatches CI on the release branch itself.
-  actions: write
+permissions: {}
+
+concurrency:
+  group: release-pr
+  cancel-in-progress: false
 
 jobs:
   release-pr:
     name: Cut release PR
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+      # Dispatches CI on the release branch: a GITHUB_TOKEN pull request starts no run.
+      actions: write
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 26
+          package-manager-cache: false
 
       - run: npm ci --ignore-scripts
 
@@ -54,7 +56,7 @@ jobs:
         run: npm run release:body -- "--output=$RUNNER_TEMP/release-body.md"
 
       - name: Create release PR
-        uses: peter-evans/create-pull-request@v8
+        uses: peter-evans/create-pull-request@3ffccacd46053766916f087ce41d627c0b8cf2d1 # v8.1.3
         with:
           branch: release/v${{ steps.bump.outputs.version }}
           base: main
