@@ -253,8 +253,8 @@ const NOT_ELEMENTS = new Set(['ng-template', 'ng-container', 'ng-content']);
  * **Full compilation.** An application build emits `ɵɵdefineComponent`, which
  * this does not read. A package with no partial declaration on a custom element
  * gets one finding saying nothing was checked, rather than an empty array, and
- * the finding names the reason: no partial declaration at all, which is full
- * mode or the wrong directory, or declarations that all sit on an attribute, a
+ * the finding names the reason: no Angular declaration at all, which is a
+ * package that has none or the wrong directory, or only full-mode ones, or declarations that all sit on an attribute, a
  * native element or no selector — a headless directive library, which is in
  * the right form and simply has nothing in scope.
  *
@@ -290,7 +290,10 @@ export async function globalAttributeInputs(options: GlobalAttributeInputsOption
   const declarations = modules.flatMap(module => module.declarations);
   const checked = declarations.filter(declaration => namesCustomElement(declaration.selector));
 
-  if (checked.length === 0) return [nothingChecked(modules.length, declarations)];
+  if (checked.length === 0) {
+    const fullMode = modules.some(module => module.fullyCompiled.size > 0);
+    return [nothingChecked(modules.length, declarations, fullMode)];
+  }
 
   const surfaces = new SurfaceReader(reader, new InstalledPackages(ts));
   const findings = new Map<string, string[]>();
@@ -351,20 +354,30 @@ export async function globalAttributeInputs(options: GlobalAttributeInputsOption
 
 /**
  * The one finding for a package with nothing in scope, giving the reason that
- * is true of it. No partial declaration at all is a build in the wrong form or
- * a path to the wrong directory. Declarations that are all on a host the
+ * is true of it. No partial declaration and no full-mode one either is a
+ * package with no Angular declarations, or a path to the wrong directory; no
+ * partial declaration beside full-mode ones is a build in the wrong form. Declarations that are all on a host the
  * consumer chose are neither — the package is in partial form, the way
  * ngx-toastr or ngx-mask ship, and blaming full mode would send its author
  * looking for a build problem that is not there.
  */
-function nothingChecked(files: number, declarations: readonly PartialDeclaration[]): string {
+function nothingChecked(files: number, declarations: readonly PartialDeclaration[], fullMode: boolean): string {
   const read =
     `read ${String(files)} JavaScript file(s) reachable from \`exports\` and found ` +
     `${String(declarations.length)} partial declaration(s), none of them on a custom element — so nothing was checked.`;
+  if (declarations.length === 0 && !fullMode) {
+    // @ngrx/store is the case: a package with no Angular declarations in it,
+    // for which "compiled in full mode" is a diagnosis nothing supports.
+    return (
+      `${read} The files hold no Angular component or directive at all, in partial or in full form, so the ` +
+      'package has none to check. If it is meant to have some, `packageDir` is the wrong directory.'
+    );
+  }
   if (declarations.length === 0) {
     return (
-      `${read} A package compiled in full mode carries \`ɵɵdefineComponent\` rather than ` +
-      '`ɵɵngDeclareComponent`, and is not in the form a library is published in.'
+      `${read} They hold components or directives compiled in full mode, which carry ` +
+      '`ɵɵdefineComponent` rather than `ɵɵngDeclareComponent` and are not in the form a library is ' +
+      'published in.'
     );
   }
   const example = declarations.find(declaration => declaration.selector !== null)?.selector;

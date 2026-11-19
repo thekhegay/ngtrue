@@ -136,8 +136,9 @@ the code it excuses.
   package declares, so the class is named as not fully checked. The names your
   host exposes from it are still checked.
 - **A package with nothing on a custom element.** One finding says nothing was
-  checked, and why. With no partial declarations at all, the package was
-  compiled in full mode or the path is the wrong directory. With declarations
+  checked, and why. With no Angular declaration at all, the package has none
+  or the path is the wrong directory; with only full-mode ones, it was compiled
+  in full mode. With declarations
   that all sit on an attribute selector, a native element or no selector, it is
   a headless directive library, built the right way, with nothing in scope.
 - **A package with no `exports`.** There is no list of files to start from.
