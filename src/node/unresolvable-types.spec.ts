@@ -103,6 +103,53 @@ describe('unresolvableTypes', () => {
     });
   });
 
+  describe('the declarations it imports from other packages', () => {
+    it('finds nothing wrong with imports of another package that its `exports` offers', async () => {
+      // A root, a subpath, a Node built-in, the package's own name and a
+      // relative file that names a subpath too: all resolve, or are not judged.
+      expect(await unresolvableTypes({ packageDir: FIXTURES.importsSound })).toEqual([]);
+    });
+
+    it('names the file and the path of another package that its `exports` does not offer', async () => {
+      // `@fixture/peer/deep/hidden` is a file on disk and not in the peer's
+      // `exports`, which is ngx-formly 10.0.0's shape: the import is in a file
+      // the entry point reaches only through a relative import, and a consumer
+      // under either mode cannot resolve it.
+      const hidden = (mode: string) =>
+        `dist/inner.d.ts: imports '@fixture/peer/deep/hidden', which does not resolve under ${mode} ` +
+        '— @fixture/peer is installed and does not offer that path.';
+      expect(await unresolvableTypes({ packageDir: FIXTURES.importsBroken })).toEqual([
+        hidden('node16'),
+        hidden('bundler'),
+      ]);
+      expect(await unresolvableTypes({ packageDir: FIXTURES.importsBroken, modes: ['bundler'] })).toEqual([
+        hidden('bundler'),
+      ]);
+    });
+
+    it('reports an import of a package that is not installed as not checked, and not as a pass', async () => {
+      expect(await unresolvableTypes({ packageDir: FIXTURES.importsUninstalled })).toEqual([
+        '2 specifiers imported by the shipped declarations belong to packages that are not installed, so whether ' +
+          'they resolve was not checked: @fixture/absent, @fixture/absent/deep.',
+      ]);
+    });
+
+    it('excuses an import by its specifier or by its package, and reports an entry that excuses nothing', async () => {
+      expect(
+        await unresolvableTypes({
+          packageDir: FIXTURES.importsUninstalled,
+          ignore: ['@fixture/absent/deep', '@fixture/absent'],
+        }),
+      ).toEqual([]);
+      expect(
+        await unresolvableTypes({
+          packageDir: FIXTURES.importsBroken,
+          ignore: ['@fixture/peer/deep/hidden', '@fixture/nothing'],
+        }),
+      ).toEqual([stale('@fixture/nothing')]);
+    });
+  });
+
   it('reports a package with no `exports` as unprobed rather than passing it', async () => {
     // Not "cannot be imported from TypeScript": without `exports` the package
     // is imported through `main`, so the sentence says what was not done.
