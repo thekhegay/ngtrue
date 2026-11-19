@@ -26,9 +26,9 @@ The directory holding the `package.json` to check — the BUILT package, whose d
 
 > `readonly` `optional` **ignore?**: readonly `string`[]
 
-Defined in: [src/node/unexported-types.ts:35](https://github.com/thekhegay/ngtrue/blob/main/src/node/unexported-types.ts#L35)
+Defined in: [src/node/unexported-types.ts:37](https://github.com/thekhegay/ngtrue/blob/main/src/node/unexported-types.ts#L37)
 
-Findings that are decisions rather than defects, each spelled one of two
+Findings that are decisions rather than defects, each spelled one of three
 ways.
 
 - **A declaration's name**, exactly as a finding prints it, for a type that
@@ -37,6 +37,8 @@ ways.
   public signature names it, and every other unexported declaration that
   happens to share the name. A name that does not resolve at all cannot be
   exempted: a declaration file that is missing is not a decision.
+- **A host directive's name**, for one that is meant to stay out of a
+  subpath its host is imported from. It exempts every host that applies it.
 - **A subpath**, spelled as it is in `exports` (`"./schematics/*"`), to
   acknowledge that a wildcard cannot be read, or that a subpath does not
   load as declarations on purpose.

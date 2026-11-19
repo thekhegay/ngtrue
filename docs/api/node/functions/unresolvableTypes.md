@@ -4,7 +4,7 @@
 
 > **unresolvableTypes**(`options`): `Promise`\<readonly `string`[]\>
 
-Defined in: [src/node/unresolvable-types.ts:143](https://github.com/thekhegay/ngtrue/blob/main/src/node/unresolvable-types.ts#L143)
+Defined in: [src/node/unresolvable-types.ts:177](https://github.com/thekhegay/ngtrue/blob/main/src/node/unresolvable-types.ts#L177)
 
 Every subpath whose TYPES do not resolve, under each mode, as one sentence
 each. An empty array is a pass.
@@ -32,6 +32,31 @@ A subpath that resolves to JavaScript is reported as loudly as one that
 resolves to nothing. It is the worse of the two — a consumer gets `any`, no
 error, and the package appears to work until something that should not have
 compiled ships.
+
+## A second lane: other packages' paths
+
+Resolving the package's own subpaths says nothing about what its declarations
+import. Starting from the declaration files the subpaths resolve to, and
+following relative imports, every bare specifier of ANOTHER package is
+resolved from the file that names it, under each mode, and one the package it
+names does not offer is a finding:
+`dist/inner.d.ts: imports '@ngx-formly/core/types/x', which does not resolve under node16 — @ngx-formly/core is installed and does not offer that path.`
+That is [ngx-formly#4218](https://github.com/ngx-formly/ngx-formly/issues/4218):
+`@ngx-formly/material` 10.0.0 shipped a declaration importing a path
+`@ngx-formly/core` has on disk and does not export, and every consumer's
+build failed until 10.0.1, an hour later. TypeScript says nothing at the
+package that causes it, and `arethetypeswrong` follows imports of the
+package's own name only.
+
+A specifier whose package is not installed where the file would find it, or
+as `@types/<name>`, cannot be answered, and is reported in ONE line naming
+all of them rather than passed: `ignore` takes a specifier or a package name
+for those, and for a finding. A relative import, one of the package's own
+name, `#` imports and Node built-ins are not judged here. Only files an
+entry point reaches are read, since a declaration nothing imports is not what
+a consumer's compiler opens. Where the peers are not installed, as in a bare
+checkout, this lane is mostly the "not checked" line: run it where the
+package's dependencies are.
 
 ## What it does not check
 
@@ -75,7 +100,9 @@ does land on that `.js`. A bare string pointing at a `.css` file — the shape
 in #183 — is probed too: it offers the file to every condition, TypeScript's
 included, and what a TypeScript import of it gets is the question this check
 answers. A package that keeps that shape on purpose says so in `ignore`,
-where the decision is written down rather than guessed from the extension.
+where the decision is written down rather than guessed from the extension,
+and the finding names the target the subpath offers so the reader can tell a
+stylesheet from a file that went missing.
 
 **Only the conditions this package actually declares are probed.** An
 ESM-only package has no `require` branch, and reporting one missing would be

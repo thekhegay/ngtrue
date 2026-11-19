@@ -4,7 +4,7 @@
 
 > **assertSignalFormsControl**\<`T`\>(`subject`, `options?`): `Promise`\<`void`\>
 
-Defined in: [src/testing/signal-forms-control.ts:343](https://github.com/thekhegay/ngtrue/blob/main/src/testing/signal-forms-control.ts#L343)
+Defined in: [src/testing/signal-forms-control.ts:351](https://github.com/thekhegay/ngtrue/blob/main/src/testing/signal-forms-control.ts#L351)
 
 Assert that a candidate control is wired to Angular's Signal Forms, and fail
 naming the rule that broke.
@@ -203,6 +203,14 @@ do by hand:
   the surrounding field and read the real one with `skipSelf`, or its inner
   controls each announce the outer field's error as their own. That turns on
   the library's own form-field token, which ngtrue cannot know about.
+- **The type of a constraint input must include `undefined`.** `[formField]`
+  binds `min`, `max`, `minLength` and `maxLength` with `undefined` when the
+  field has no such constraint, and `strictTemplates` rejects a control whose
+  input is typed `number` alone. That error lands in the consumer's template,
+  which this assertion does not compile. A class that
+  `implements FormValueControl<T>` has it caught by `tsc`, and an Angular
+  maintainer's answer is that the input must admit it
+  ([angular/angular#71377](https://github.com/angular/angular/issues/71377)).
 
 **The round trip proves the binding, not the component.** It shows that the
 model resolved from the definitions is the one Angular connected, and that a
