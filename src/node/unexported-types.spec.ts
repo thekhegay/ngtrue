@@ -152,6 +152,38 @@ describe('unexportedTypes', () => {
     );
   });
 
+  describe('host directives', () => {
+    it('finds nothing wrong with a package whose subpaths each export the host directives they apply', async () => {
+      // The sound package re-exports `FieldIdentity`, `FieldTone` and
+      // `FieldBase` from `./form-field` and is otherwise the broken package:
+      // the two share their root declarations byte for byte. `Outside` applies
+      // a directive of another package, which nothing here judges, and `Badge`
+      // reaches `FieldHint` through the root's own name, which exports it:
+      // a bare specifier is judged by the module it names, and `./form-field`
+      // not exporting it is no finding.
+      expect(file(FIXTURES.hostdirsSound, 'dist/index.d.ts')).toBe(file(FIXTURES.hostdirsBroken, 'dist/index.d.ts'));
+      expect(await unexportedTypes({ packageDir: FIXTURES.hostdirsSound })).toEqual([]);
+    });
+
+    it('names the subpath, the host and the directive a consumer cannot name from it', async () => {
+      // `FieldIdentity` is exported by `.` and not by `./form-field`, which is
+      // the ngx-signal-forms rc.13 shape: "some subpath exports it" is not the
+      // rule, since the consumer imports the host from `./form-field`. One line
+      // per way of reaching it: applied by the class itself, and inherited
+      // from a base.
+      expect(await unexportedTypes({ packageDir: FIXTURES.hostdirsBroken })).toEqual([
+        'fixture-hostdirs-broken/form-field: FormField has host directive FieldIdentity, which this subpath does not export.',
+        'fixture-hostdirs-broken/form-field: TextField inherits host directive FieldTone from FieldBase, which this subpath does not export.',
+      ]);
+    });
+
+    it('exempts a host directive by its name, like any other declaration', async () => {
+      expect(
+        await unexportedTypes({ packageDir: FIXTURES.hostdirsBroken, ignore: ['FieldIdentity', 'FieldTone'] }),
+      ).toEqual([]);
+    });
+  });
+
   describe('on subpaths it cannot read', () => {
     it('reports a wildcard as unread, since its exports go uncounted', async () => {
       const problems = await unexportedTypes({ packageDir: FIXTURES.broken });

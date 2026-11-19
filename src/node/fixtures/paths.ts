@@ -33,6 +33,8 @@ export const FIXTURES = {
   unexportedDangling: `${here}/unexported-dangling`,
   unexportedWildcard: `${here}/unexported-wildcard`,
   unexportedStale: `${here}/unexported-stale`,
+  hostdirsSound: `${here}/hostdirs-sound`,
+  hostdirsBroken: `${here}/hostdirs-broken`,
   declarationsSound: `${here}/declarations-sound`,
   declarationsBroken: `${here}/declarations-broken`,
   declarationsHeadless: `${here}/declarations-headless`,

@@ -1,0 +1,16 @@
+{
+  "name": "fixture-hostdirs-broken",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./form-field": {
+      "types": "./dist/form-field.d.ts",
+      "default": "./dist/form-field.js"
+    },
+    "./package.json": "./package.json"
+  }
+}
