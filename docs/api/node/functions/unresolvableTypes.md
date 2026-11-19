@@ -40,7 +40,7 @@ import. Starting from the declaration files the subpaths resolve to, and
 following relative imports, every bare specifier of ANOTHER package is
 resolved from the file that names it, under each mode, and one the package it
 names does not offer is a finding:
-`dist/inner.d.ts: imports '@ngx-formly/core/types/x', which does not resolve under node16 — @ngx-formly/core is installed and does not offer that path.`
+`dist/inner.d.ts: imports '@ngx-formly/core/types/x', which does not resolve under node16: @ngx-formly/core is installed and does not offer that path.`
 That is [ngx-formly#4218](https://github.com/ngx-formly/ngx-formly/issues/4218):
 `@ngx-formly/material` 10.0.0 shipped a declaration importing a path
 `@ngx-formly/core` has on disk and does not export, and every consumer's

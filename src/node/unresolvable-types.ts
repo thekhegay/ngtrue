@@ -38,7 +38,7 @@ export interface UnresolvableTypesOptions {
    * import is meant to resolve.
    *
    * A specifier of another package, exactly as a finding prints it, or the
-   * package's name, excuses the imports of it that the second lane reads — the
+   * package's name, excuses the imports of it that the second lane reads. It is the
    * way to acknowledge an optional peer that is not installed.
    *
    * An entry that exempts nothing is reported: a subpath whose types resolve,
@@ -85,7 +85,7 @@ export interface UnresolvableTypesOptions {
  * following relative imports, every bare specifier of ANOTHER package is
  * resolved from the file that names it, under each mode, and one the package it
  * names does not offer is a finding:
- * `dist/inner.d.ts: imports '@ngx-formly/core/types/x', which does not resolve under node16 — @ngx-formly/core is installed and does not offer that path.`
+ * `dist/inner.d.ts: imports '@ngx-formly/core/types/x', which does not resolve under node16: @ngx-formly/core is installed and does not offer that path.`
  * That is [ngx-formly#4218](https://github.com/ngx-formly/ngx-formly/issues/4218):
  * `@ngx-formly/material` 10.0.0 shipped a declaration importing a path
  * `@ngx-formly/core` has on disk and does not export, and every consumer's
@@ -403,8 +403,8 @@ function importsOfOtherPackages(
       const resolved = ts.resolveModuleName(specifier, file, compilerOptions, ts.sys).resolvedModule;
       if (resolved === undefined) {
         problems.push(
-          `${relative(root, file).split(sep).join('/')}: imports '${specifier}', which does not resolve under ${mode} ` +
-            `— ${name} is installed and does not offer that path.`,
+          `${relative(root, file).split(sep).join('/')}: imports '${specifier}', which does not resolve under ${mode}` +
+            `: ${name} is installed and does not offer that path.`,
         );
       }
     }

@@ -60,7 +60,7 @@ each bare specifier of **another** package is resolved from the file that names
 it, under each mode:
 
 ```text
-dist/inner.d.ts: imports '@ngx-formly/core/types/x', which does not resolve under node16 — @ngx-formly/core is installed and does not offer that path.
+dist/inner.d.ts: imports '@ngx-formly/core/types/x', which does not resolve under node16: @ngx-formly/core is installed and does not offer that path.
 ```
 
 That is [ngx-formly#4218](https://github.com/ngx-formly/ngx-formly/issues/4218):
