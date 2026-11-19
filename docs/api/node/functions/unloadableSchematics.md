@@ -4,7 +4,7 @@
 
 > **unloadableSchematics**(`options`): `Promise`\<readonly `string`[]\>
 
-Defined in: [src/node/unloadable-schematics.ts:159](https://github.com/thekhegay/ngtrue/blob/main/src/node/unloadable-schematics.ts#L159)
+Defined in: [src/node/unloadable-schematics.ts:164](https://github.com/thekhegay/ngtrue/blob/main/src/node/unloadable-schematics.ts#L164)
 
 Every schematic and `ng update` migration a package declares that the
 Angular CLI cannot load, as one sentence each. An empty array is a pass.
@@ -106,6 +106,11 @@ collection that `extends` one of theirs. A library that builds schematics
 has them as dev dependencies already. The check itself needs
 `@angular-devkit/schematics`, an optional peer of ngtrue, and throws rather
 than passing when it is absent.
+
+**The answer is the installed devkit's answer** as well. `ng update` loads a
+package's migrations with the newest CLI, so run the check in CI against the
+newest `@angular-devkit/schematics` too, not only the one the repository
+pins.
 
 **The answer is this Node's answer**, as the CLI's is the consumer's. A
 true-ESM factory loads through `require()` on every Node the current CLI
