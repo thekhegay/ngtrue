@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { FIXTURES } from './fixtures/paths.js';
-import { unloadableSchematics } from './unloadable-schematics.js';
+import { loadDevkit, packEntries, unloadableSchematics } from './unloadable-schematics.js';
 
 /** What Node says when it evaluates CommonJS as ESM, on every Node the CLI supports. */
 const ESM_SCOPE = 'exports is not defined in ES module scope';
@@ -128,14 +128,16 @@ describe('unloadableSchematics', { timeout: 30_000 }, () => {
     try {
       // The hazard first, so this cannot pass on an npm that stopped reading
       // the setting: asked plainly, npm packs the member.
-      const plain = JSON.parse(
-        execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], {
-          cwd: FIXTURES.schematicsWorkspaceRoot,
-          encoding: 'utf8',
-          stdio: ['ignore', 'pipe', 'pipe'],
-          shell: process.platform === 'win32',
-        }),
-      ) as readonly { readonly name: string }[];
+      const plain = packEntries(
+        JSON.parse(
+          execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], {
+            cwd: FIXTURES.schematicsWorkspaceRoot,
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe'],
+            shell: process.platform === 'win32',
+          }),
+        ),
+      );
       expect(plain.map(pack => pack.name)).toEqual(['@fixture/schematics-workspace-member']);
 
       expect(await unloadableSchematics({ packageDir: FIXTURES.schematicsWorkspaceRoot })).toEqual([]);
@@ -263,5 +265,86 @@ describe('unloadableSchematics', { timeout: 30_000 }, () => {
 
     expect(problems).toHaveLength(2);
     expect(probesLeft()).toEqual([]);
+  });
+});
+
+describe('loadDevkit', () => {
+  // The repository's own devkit is the 22.2 shape: no `exports` map, so `tools`
+  // is a directory an ESM import refuses and the file has to be named.
+  it('loads the devkit without an exports map, naming the tools file', async () => {
+    const devkit = await loadDevkit();
+
+    expect(typeof devkit.SchematicEngine).toBe('function');
+    expect(typeof devkit.NodeModulesEngineHost).toBe('function');
+  });
+
+  // `devkit-22-3` is an npm alias of `@angular-devkit/schematics@22.3.0`, whose
+  // `exports` map has `./tools` and not `./tools/index.js`.
+  it('loads the 22.3 devkit, whose exports map has no tools/index.js', async () => {
+    const devkit = await loadDevkit({
+      engine: () => import('devkit-22-3'),
+      tools: () => import('devkit-22-3/tools'),
+      // Not in the 22.3 exports map, so the first try has to be the one that works.
+      toolsIndex: () => Promise.reject(new Error('tools/index.js is not exported by 22.3')),
+    });
+
+    expect(typeof devkit.SchematicEngine).toBe('function');
+    expect(typeof devkit.NodeModulesEngineHost).toBe('function');
+  });
+
+  it('reports a devkit that fails for another reason with the cause code and message', async () => {
+    // Not a directory import, so it must not fall back to `tools/index.js`.
+    let fellBack = false;
+    const failure = Object.assign(new Error('Package subpath is not defined'), {
+      code: 'ERR_PACKAGE_PATH_NOT_EXPORTED',
+    });
+    const error = await loadDevkit({
+      engine: () => Promise.resolve({}),
+      tools: () => Promise.reject(failure),
+      toolsIndex: () => {
+        fellBack = true;
+        return Promise.resolve({});
+      },
+    }).then(
+      () => {
+        throw new Error('loadDevkit resolved');
+      },
+      (caught: Error) => caught,
+    );
+
+    expect(error.message).toContain('did not load — ERR_PACKAGE_PATH_NOT_EXPORTED: Package subpath is not defined');
+    expect(error.cause).toBe(failure);
+    expect(fellBack).toBe(false);
+  });
+
+  it('says the peer is missing when the package is not there', async () => {
+    const missing = Object.assign(new Error('Cannot find package'), { code: 'ERR_MODULE_NOT_FOUND' });
+    await expect(
+      loadDevkit({
+        engine: () => Promise.reject(missing),
+        tools: () => Promise.resolve({}),
+        toolsIndex: () => Promise.resolve({}),
+      }),
+    ).rejects.toThrow(/optional peer dependency and is not installed/);
+  });
+});
+
+describe('packEntries', () => {
+  it('reads the array npm 11 and older print', () => {
+    const printed: unknown = JSON.parse('[{"name":"@scope/lib","files":[{"path":"package.json"}]}]');
+
+    expect(packEntries(printed)).toEqual([{ name: '@scope/lib', files: [{ path: 'package.json' }] }]);
+  });
+
+  it('reads the object keyed by package name npm 12 prints', () => {
+    const printed: unknown = JSON.parse('{"@scope/lib":{"name":"@scope/lib","files":[{"path":"package.json"}]}}');
+
+    expect(packEntries(printed)).toEqual([{ name: '@scope/lib', files: [{ path: 'package.json' }] }]);
+  });
+
+  it('reads nothing from output that is neither', () => {
+    expect(packEntries(JSON.parse('null'))).toEqual([]);
+    expect(packEntries(JSON.parse('"text"'))).toEqual([]);
+    expect(packEntries(JSON.parse('[1,null]'))).toEqual([]);
   });
 });
