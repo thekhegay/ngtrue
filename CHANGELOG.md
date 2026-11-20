@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.0](https://github.com/thekhegay/ngtrue/compare/v0.3.1...v0.4.0) (2026-11-20)
+
+### Features
+
+* **node:** unexportedTypes reads host directives per subpath ([6d8f216](https://github.com/thekhegay/ngtrue/commit/6d8f216eab2ddb238e2798e68d3526b33b6d2d25))
+* **node:** unresolvableTypes resolves imports of other packages against their exports ([941c80a](https://github.com/thekhegay/ngtrue/commit/941c80aa7e3744d0a481cf5a1d26382ad93d29b9))
+
+### Bug Fixes
+
+* **node:** angularPeerFloorsTooLow says what it read when the Angular peer is not direct ([40b6ca2](https://github.com/thekhegay/ngtrue/commit/40b6ca284ba9b5813b42cd1403f90503c3ee6fad))
+* **node:** globalAttributeInputs says a package has no Angular declarations instead of blaming full mode ([1825f5b](https://github.com/thekhegay/ngtrue/commit/1825f5b94bdac6ebdafeb028170dd34f26ab31ef))
+* **node:** no dash in the unresolvableTypes import finding ([721937b](https://github.com/thekhegay/ngtrue/commit/721937b1ba7f5c5e8b8623eb6073a37ba08a98ed))
+* **node:** unresolvableTypes names the target a subpath offers ([1b4f9a9](https://github.com/thekhegay/ngtrue/commit/1b4f9a94fe6f4fcc786e1d441384a969abfe3561))
+
 ## [0.3.1](https://github.com/thekhegay/ngtrue/compare/v0.3.0...v0.3.1) (2026-11-19)
 
 ### Bug Fixes
